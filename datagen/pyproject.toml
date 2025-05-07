@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "datagen"
+version = "0.1.0"
+description = "Sample synthetic data with vLLM"
+authors = ["Rohan Pandey <rohan@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+vllm = "0.6.6"
+pandas = "^2.2"
+pyarrow = "^16.0"
+datasets = "^3.5"
+setuptools = "^80.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
