@@ -1,19 +1,16 @@
 #!/usr/bin/env python
 # translate_bookcorpus_to_sanskrit.py
 """
-Synthetic-translation data generator
-────────────────────────────────────
+Synthetic-translation data generator (resumable, variable-length HDF5)
+─────────────────────────────────────────────────────────────────────
 • Input  : BookCorpus English passages (streaming)
 • Model  : google/gemma-3-27b-it (bfloat16, TP = #GPUs)
-• Output : translations.parquet – one row per passage, streamed in row-groups
-           (so RAM stays ≪ GPU VRAM)
-
-Example (8 × H100):
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python translate_bookcorpus_to_sanskrit.py \
-    --batch_size 32 --chunk_size 2048
+• Output : translations.h5 – three variable-length columns
+           ↳ Resumes automatically if the file already contains rows
 """
 import os, argparse, datetime as dt
-import pyarrow as pa, pyarrow.parquet as pq
+import numpy as np
+import tables as tb                       # low-level PyTables API
 from datasets import load_dataset, logging as ds_logging
 from vllm import LLM, SamplingParams
 
@@ -21,14 +18,30 @@ from vllm import LLM, SamplingParams
 p = argparse.ArgumentParser()
 p.add_argument("--model", default="google/gemma-3-27b-it", help="HF model repo")
 p.add_argument("--max_passages", type=int, default=None,
-               help="Optional hard stop (useful for smoke tests)")
-p.add_argument("--batch_size", type=int, default=32, help="#prompts per vLLM call")
+               help="Optional hard stop (smoke tests)")
+p.add_argument("--batch_size", type=int, default=1024, help="#prompts per vLLM call")
 p.add_argument("--chunk_size", type=int, default=2_048,
-               help="Rows per Parquet row-group write")
-p.add_argument("--out", default="translations.parquet", help="Parquet destination")
+               help="Rows per HDF5 append")
+p.add_argument("--out", default="/home/ubuntu/output/translations.h5", help="HDF5 destination")
 p.add_argument("--tp", type=int, default=int(os.environ.get("TP", 8)),
                help="tensor_parallel_size (defaults to #GPUs)")
 args = p.parse_args()
+
+# ─────────── Open / create HDF5 file & arrays ─────────── #
+h5 = tb.open_file(args.out, mode="a")
+if "/data" in h5:
+    group        = h5.root.data
+    id_arr       = group.id
+    eng_arr      = group.english
+    san_arr      = group.sanskrit
+    existing_rows = id_arr.nrows
+    print(f"[resume] found {existing_rows:,} rows – skipping those.")
+else:
+    group        = h5.create_group("/", "data")
+    id_arr       = h5.create_earray(group, "id", atom=tb.Int64Atom(), shape=(0,))
+    eng_arr      = h5.create_vlarray(group, "english",  atom=tb.VLUnicodeAtom())
+    san_arr      = h5.create_vlarray(group, "sanskrit", atom=tb.VLUnicodeAtom())
+    existing_rows = 0
 
 # ─────────────────────── vLLM initialisation ───────────────────── #
 print(f"[{dt.datetime.now():%F %T}] → Loading Gemma …")
@@ -37,71 +50,80 @@ llm = LLM(
     tensor_parallel_size=args.tp,
     pipeline_parallel_size=1,
     dtype="bfloat16",
-    max_model_len=128_000,
+    max_model_len=4096,
     enable_chunked_prefill=True,
     gpu_memory_utilization=0.90,
     trust_remote_code=True,
 )
 
 prompt_tmpl = (
-    "Translate the following English text to Sanskrit. "
-    "Return only Devanagari Sanskrit. Do NOT return any English.\n\n"
-    "English:\n{passage}\n\nSanskrit:"
+    "Translate the following English text to Sanskrit. Return only one Devanagari Sanskrit translation wrapped in triple backticks. Do NOT return any English.\n\n"
+    "English:\n```\n{passage}\n```\n\nSanskrit:"
 )
 
 sampling = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=1024, n=1)
 
 # ─────────────────────── dataset streaming ─────────────────────── #
-ds_logging.set_verbosity_error()  # silence HF progress bars
-book = load_dataset(
-    "bookcorpus/bookcorpus",
-    "plain_text",
-    split="train",
-    streaming=True,
-    trust_remote_code=True,
+ds_logging.set_verbosity_error()
+dataset_iter = iter(
+    load_dataset(
+        "bookcorpus/bookcorpus",
+        "plain_text",
+        split="train",
+        streaming=True,
+        trust_remote_code=True,
+    )
 )
 
-def batched(iterable, n):
+# fast-forward past rows we already translated
+for _ in range(existing_rows):
+    try:
+        next(dataset_iter)
+    except StopIteration:
+        break
+
+def batched(it, n):
     buf = []
-    for item in iterable:
+    for item in it:
         buf.append(item)
         if len(buf) == n:
-            yield buf
-            buf = []
+            yield buf; buf = []
     if buf:
         yield buf
 
-# ───────────────────────── parquet writer ───────────────────────── #
-writer      = None             # will hold ParquetWriter after first flush
-chunk_rows  = []               # small in-RAM buffer
-seen        = 0                # global counter
+# ───────────────────── buffers & helpers ───────────────────── #
+ids_buf, eng_buf, san_buf = [], [], []
 
 def flush_chunk():
-    """Write current chunk_rows to disk and clear the buffer."""
-    global writer, chunk_rows
-    if not chunk_rows:
+    """Append buffers to VLArrays and clear them."""
+    if not ids_buf:            # nothing to write
         return
-    table = pa.Table.from_pylist(chunk_rows)
-    if writer is None:         # first time → create file & schema
-        writer = pq.ParquetWriter(args.out, table.schema, compression="zstd")
-    writer.write_table(table)
-    chunk_rows.clear()
+
+    # 1.  numeric IDs — EArray happily accepts a list
+    id_arr.append(ids_buf)
+
+    # 2.  variable-length strings — one call per element
+    for s in eng_buf:
+        eng_arr.append(s)
+    for s in san_buf:
+        san_arr.append(s)
+
+    h5.flush()
+    ids_buf.clear(); eng_buf.clear(); san_buf.clear()
 
 # ───────────────────────── main loop ───────────────────────────── #
-for batch in batched(book, args.batch_size):
+seen = existing_rows
+for batch in batched(dataset_iter, args.batch_size):
     prompts = [prompt_tmpl.format(passage=ex["text"]) for ex in batch]
     outs    = llm.generate(prompts, sampling)
 
     for ex, out in zip(batch, outs):
-        chunk_rows.append(
-            dict(
-                bookcorpus_id = seen,
-                english       = ex["text"],
-                sanskrit      = out.outputs[0].text.strip(),
-            )
-        )
+        ids_buf.append(seen)
+        eng_buf.append(ex["text"])
+        san_buf.append(out.outputs[0].text.strip())
         seen += 1
-        if len(chunk_rows) >= args.chunk_size:
+
+        if len(ids_buf) >= args.chunk_size:
             flush_chunk()
 
     if seen % 10_000 == 0:
@@ -110,6 +132,5 @@ for batch in batched(book, args.batch_size):
         break
 
 flush_chunk()          # final partial chunk
-if writer is not None:
-    writer.close()
-print(f"✓ Saved {seen:,} rows → {os.path.abspath(args.out)}")
+h5.close()
+print(f"✓ Total rows in file: {seen:,} → {os.path.abspath(args.out)}")

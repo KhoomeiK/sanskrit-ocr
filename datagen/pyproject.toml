@@ -12,6 +12,7 @@ pandas = "^2.2"
 pyarrow = "^16.0"
 datasets = "^3.5"
 setuptools = "^80.3"
+tables = "3.9.2"
 
 [build-system]
 requires = ["poetry-core"]

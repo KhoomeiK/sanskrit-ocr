@@ -2,6 +2,7 @@
 sudo apt update
 sudo apt install -y mosh
 sudo apt install -y nvidia-cuda-toolkit
+sudo apt install -y libhdf5-dev
 
 curl -sSL https://install.python-poetry.org | python3 -
 echo 'export PATH="/home/ubuntu/.local/bin:$PATH"' >> ~/.bashrc
