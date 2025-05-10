@@ -1,0 +1,2 @@
+model,wer,cer,BHSv1S1_wer,BHSv1S1_cer,GG1_wer,GG1_cer,BHSv1S4_wer,BHSv1S4_cer,GG2_wer,GG2_cer,GG3_wer,GG3_cer,GOSv1S2_wer,GOSv1S2_cer,GOSv1S3_wer,GOSv1S3_cer
+surya,0.650,0.339,0.650,0.233,0.652,0.421,0.623,0.129,0.614,0.321,0.649,0.379,0.637,0.375,0.758,0.390
