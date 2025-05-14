@@ -1,0 +1,7 @@
+\
+numpy
+tables
+datasets
+vllm
+pandas
+Pillow 
