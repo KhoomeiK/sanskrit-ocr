@@ -99,17 +99,58 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
     
     try:
         font = ImageFont.truetype(font_path, font_size)
-        lines = text.strip().split('\n')
-        y_position = random.randint(25, 75)
         
-        for line in lines:
+        # Remove newlines and treat all text as one block
+        words = text.strip().replace('\n', ' ').split()
+        
+        y_position = random.randint(25, 75)
+        margin = 25  # Left and right margin
+        
+        # Available width for text
+        available_width = width - 2 * margin
+        space_width = draw.textlength(" ", font=font)
+        
+        current_line = []
+        current_line_width = 0
+        
+        # Collect all lines first
+        all_lines = []
+        for word in words:
+            word_width = draw.textlength(word, font=font)
+            
+            # Check if adding this word would exceed available width
+            if current_line and current_line_width + space_width + word_width > available_width:
+                all_lines.append(current_line)
+                current_line = [word]
+                current_line_width = word_width
+            else:
+                if current_line:
+                    current_line_width += space_width + word_width
+                else:
+                    current_line_width = word_width
+                current_line.append(word)
+        
+        # Add the last line if there's anything left
+        if current_line:
+            all_lines.append(current_line)
+        
+        # Render all lines
+        for line in all_lines:
+            # Center the line horizontally
+            line_text = " ".join(line)
+            line_width = draw.textlength(line_text, font=font)
+            x_position = (width - line_width) // 2
+            
             baseline_offset = random.randint(-2, 2) * params.baseline
             y_line_position = y_position + baseline_offset
             
-            words = line.split()
-            x_position = (width - draw.textlength(line, font=font)) // 2
+            # Check if we've reached the bottom of the image
+            if y_line_position + font_size > height - margin:
+                break
             
-            for word in words:
+            # Render each word in the line
+            x_word_position = x_position
+            for word in line:
                 word_x_offset = int(random.uniform(-1.5, 1.5) * params.word_position)
                 word_y_offset = int(random.uniform(-1, 1) * params.word_position)
                 
@@ -120,13 +161,11 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
                     np.clip(ink_color[2] + color_variation, 0, 255)
                 )
                 
-                if hasattr(draw, 'textlength'):
-                    word_width = draw.textlength(word, font=font)
-                    word_height = font_size * 1.2
-                else:
-                    word_width, word_height = font.getsize(word)
+                word_width = draw.textlength(word, font=font)
+                word_height = font_size * 1.2
                 
                 if params.word_angle > 0:
+                    # Apply rotation to individual word
                     word_angle = random.uniform(-2, 2) * params.word_angle
                     
                     diagonal = math.sqrt(word_width**2 + word_height**2)
@@ -144,18 +183,19 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
                     rotated = txt_img.rotate(word_angle, resample=Image.BICUBIC, expand=0, 
                                             center=(temp_width//2, temp_height//2))
                     
-                    paste_x = int(x_position + word_x_offset - padding)
+                    paste_x = int(x_word_position + word_x_offset - padding)
                     paste_y = int(y_line_position + word_y_offset - padding)
                     
                     img.paste(rotated, (paste_x, paste_y), rotated)
                 else:
                     draw.text(
-                        (x_position + word_x_offset, y_line_position + word_y_offset), 
+                        (x_word_position + word_x_offset, y_line_position + word_y_offset), 
                         word, fill=word_color, font=font
                     )
                 
-                x_position += word_width + draw.textlength(" ", font=font)
+                x_word_position += word_width + space_width
             
+            # Move to next line
             line_spacing_factor = 1.0 + (random.uniform(-0.1, 0.1) * params.line_spacing)
             y_position += int(font_size * 1.2 * line_spacing_factor)
         
@@ -264,8 +304,8 @@ def _generate_sanskrit_samples(text, font_path, output_dir, params):
             image_counter += 1
             output_path = os.path.join(output_dir, f"sanskrit_{style}_{i+1}.png")
             
-            # Randomly select a font size between 12 and 24
-            font_size = random.randint(12, 20)
+            # Randomly select a font size between 12 and 18
+            font_size = random.randint(12, 18)
             print(f"Using font size {font_size} for {style}_{i+1}")
             
             img = _render_sanskrit(
@@ -288,11 +328,7 @@ def _generate_sanskrit_samples(text, font_path, output_dir, params):
                     _apply_postprocessing(img, output_dir, base_filename, params)
 
 def main():
-    sanskrit_text = """ज्ञानं परमं ध्येयम्। ज्ञानात् सत्यं प्रकाशते।
-सत्येन मुक्तिः प्राप्यते। मुक्तिः परमं सुखम्।
-तस्मात् ज्ञानं समभ्यसेत्। विद्या ददाति विनयम्।
-विनयात् याति पात्रताम्। पात्रत्वात् धनमाप्नोति।
-धनात् धर्मं ततः सुखम्॥"""
+    sanskrit_text = """ज्ञानं परमं ध्येयम्। ज्ञानात् सत्यं प्रकाशते। सत्येन मुक्तिः प्राप्यते। मुक्तिः परमं सुखम्। तस्मात् ज्ञानं समभ्यसेत्। विद्या ददाति विनयम्। विनयात् याति पात्रताम्। पात्रत्वात् धनमाप्नोति। धनात् धर्मं ततः सुखम्॥"""
     
     parser = argparse.ArgumentParser(description='Generate Sanskrit text samples with word-level and image augmentations')
     
