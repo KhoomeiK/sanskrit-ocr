@@ -6,6 +6,21 @@ import math
 import argparse
 
 def _create_background(width, height, style, params):
+    # Check if image directory is provided and use image background if available
+    if params.image_dir and os.path.exists(params.image_dir):
+        image_files = [f for f in os.listdir(params.image_dir) 
+                      if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        if image_files:
+            img_path = os.path.join(params.image_dir, random.choice(image_files))
+            try:
+                bg_img = Image.open(img_path).convert('RGB')
+                # Resize the image to match required dimensions
+                bg_img = bg_img.resize((width, height), Image.LANCZOS)
+                return bg_img
+            except Exception as e:
+                print(f"Error loading background image {img_path}: {e}")
+                # Fall back to synthetic backgrounds if image loading fails
+    
     if style == "lined_paper":
         background = np.ones((height, width, 3), dtype=np.uint8) * [210, 180, 140]
         
@@ -328,6 +343,8 @@ def main():
                    help='Number of stains (0.0-1.0)')
     gen.add_argument('--stain-intensity', type=float, default=0.5,
                    help='Intensity of stain effects (0.0-1.0)')
+    gen.add_argument('--image-dir', type=str, default='',
+                    help='Directory to randomly sample background image from. If left empty, no image backgrounds will be used.')
     
     # Word-level options
     gen.add_argument('--word-position', type=float, default=0.6,
