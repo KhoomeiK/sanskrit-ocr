@@ -20,3 +20,6 @@ cd vllm
 VLLM_USE_PRECOMPILED=1 pip install -e .
 
 cd ~/sanskrit-ocr/datagen
+
+
+# pip install --upgrade "git+https://github.com/huggingface/transformers@v4.49.0-Gemma-3" ; cd ~/vllm ; VLLM_USE_PRECOMPILED=1 pip install -e . ; cd -
