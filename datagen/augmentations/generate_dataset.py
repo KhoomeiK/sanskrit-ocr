@@ -50,10 +50,14 @@ def main():
 if __name__ == "__main__":
     # Configuration
     INPUT_TXT = "./indic_merged.txt"
-    OUTPUT_DIR = "./ocr_dataset"
+    OUTPUT_DIR = "ocr_dataset"
     IMAGES_DIR = os.path.join(OUTPUT_DIR, "images")
     CAPTIONS_PATH = os.path.join(OUTPUT_DIR, "captions.jsonl")
     NUM_SAMPLES = 1000
     CHUNK_SIZE = 10
 
     main()
+
+    import subprocess
+    subprocess.run(["tar", "-czf", "ocr_dataset.tar.gz", "ocr_dataset"], check=True)
+    print("Created tar.gz archive at ocr_dataset.tar.gz")
