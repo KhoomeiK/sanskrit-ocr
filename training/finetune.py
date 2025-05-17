@@ -15,7 +15,7 @@ torch.autograd.set_detect_anomaly(True)
 
 # -------- CONFIGURATION --------
 MODEL_ID = "google/gemma-3-4b-it"  # vision-capable Gemma model
-OUTPUT_DIR = "sft_output"
+OUTPUT_DIR = "/home/ubuntu/sft_output"
 EVAL_DATASET_ID = "rs545837/sanskrit-ocr-images"
 NUM_EPOCHS = 1
 BATCH_SIZE = 1
@@ -67,8 +67,8 @@ sft_args = SFTConfig(
     report_to="wandb",
     dataset_text_field="",
     dataset_kwargs={"skip_prepare_dataset": True},
+    remove_unused_columns=False,
 )
-sft_args.remove_unused_columns = False
 
 # -------- DATA LOADING --------
 
@@ -128,18 +128,19 @@ if __name__ == "__main__":
         model=model,
         processor=processor,
         dataset=eval_ds,
-        save_preds=f"/home/ubuntu/{run_name}-eval-init.json",
+        save_preds=f"/home/ubuntu/eval_output/{run_name}-eval-init.json",
     )
     if rank == 0:
         wandb.log(
             {
                 f"sampling_eval_init/{key}": val
-                for key, val in sampling_eval_init_results
+                for key, val in sampling_eval_init_results.items()
             }
         )
 
     processor.tokenizer.padding_side = "right"
     processor.tokenizer.truncation_side = "right"
+    sft_args.run_name = run_name
     trainer = SFTTrainer(
         model=model,
         args=sft_args,
@@ -157,24 +158,25 @@ if __name__ == "__main__":
     del trainer
     torch.cuda.empty_cache()
     model = AutoModelForImageTextToText.from_pretrained(
-        OUTPUT_DIR,
+        MODEL_ID,
         quantization_config=bnb_config,
         attn_implementation="eager",
         torch_dtype=torch.bfloat16,
         device_map=None if int(os.getenv("LOCAL_RANK", "-1")) != -1 else "auto",
     )
+    model.load_adapter(os.path.join(OUTPUT_DIR))
 
     sampling_eval_final_results = run_sampling_eval(
         model=model,
         processor=processor,
         dataset=eval_ds,
-        save_preds=f"/home/ubuntu/{run_name}-eval.json",
+        save_preds=f"/home/ubuntu/eval_output/{run_name}-eval.json",
     )
     if rank == 0:
         wandb.log(
             {
                 f"sampling_eval_final/{key}": val
-                for key, val in sampling_eval_final_results
+                for key, val in sampling_eval_final_results.items()
             }
         )
         wandb.finish()
