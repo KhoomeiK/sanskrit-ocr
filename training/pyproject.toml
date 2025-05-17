@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "training"
+version = "0.1.0"
+description = "Train multimodal LLM for OCR"
+authors = ["Rohan Pandey <rohan@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+datasets = "^3.5"
+pillow = "^11.2"
+torch = "2.7.0"
+torchvision = "0.22.0"
+debugpy = "1.8.14"
+wandb = "0.19.11"
+nltk = "3.9.1"
+trl = "0.17.0"
+peft = "0.15.2"
+tensorboard = "^2.19.0"
+sentencepiece = "0.2.0"
+bitsandbytes = "0.45.5"
+accelerate = "^1.6.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
