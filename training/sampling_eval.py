@@ -102,7 +102,7 @@ class EvalConfig(NamedTuple):
     eval_dataset_id: str = "rs545837/sanskrit-ocr-images"
     split: str = "train"
     batch_size: int = 4
-    max_new_tokens: int = 64
+    max_new_tokens: int = 1024
     temperature: float = 1.0
     top_k: int = 64
     top_p: float = 0.95
@@ -149,7 +149,7 @@ class EvalConfig(NamedTuple):
 
 
 def collate_fn(examples: list[dict], processor):
-    batch = train_collate_fn(examples, processor)
+    batch = train_collate_fn(examples, processor, eval=True)
     del batch["labels"]
     batch["text"] = [ex["text"] for ex in examples]
     return batch

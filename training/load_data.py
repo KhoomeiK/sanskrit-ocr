@@ -23,7 +23,6 @@ def load_multimodal_dataset(captions_jsonl: str):
                 print(f"Warning: Image file not found: {image_path}")
                 return example
             example["image"] = Image.open(image_path).convert("RGB")
-            print(f"Done loading {image_path}")
             return example
         except Exception as e:
             print(f"Error loading image {example['image']}: {str(e)}")
@@ -49,7 +48,7 @@ def process_vision_info(messages: list[dict]):
 
 
 # Collate function to build `messages` structures and tokenize
-def collate_fn(examples: list[dict], processor):
+def collate_fn(examples: list[dict], processor, eval=False):
     batch_messages = []
     for ex in examples:
         text = ex["text"]
@@ -63,8 +62,11 @@ def collate_fn(examples: list[dict], processor):
                     {"type": "image", "image": img},
                 ],
             },
-            {"role": "assistant", "content": [{"type": "text", "text": text}]},
         ]
+        if not eval:
+            msgs.append(
+                {"role": "assistant", "content": [{"type": "text", "text": text}]}
+            )
         batch_messages.append({"messages": msgs})
 
     # Processor will flatten messages and tokenize images+text
