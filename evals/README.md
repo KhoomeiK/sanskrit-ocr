@@ -18,6 +18,9 @@ pip install pandas numpy matplotlib nltk datasets pillow tqdm pytesseract huggin
 ## Benchmark Closed Models(OpenAI, Gemini, Mistral, Claude)
 
 ```
+# Install dependencies
+pip install pandas numpy matplotlib nltk datasets tqdm huggingface_hub
+
 # For Claude
 pip install anthropic
 
@@ -32,13 +35,14 @@ pip install mistralai
 ```
 
 ```
-python ocr_benchmark.py --api [API_NAME] --key [YOUR_API_KEY] [OPTIONS]
+python benchmark_modelapi.py --api [API_NAME] --key [YOUR_API_KEY] [OPTIONS]
 ```
 
-Optional Arguments
+Optional Arguments:
+```
 --model: Model name (defaults to recommended model for each API)
 --dataset: Hugging Face dataset ID (default: "rs545837/sanskrit-ocr-images")
 --output: Output directory name (default: "results")
 --samples: Number of samples to process (default: 10)
 --visualize: Number of sample visualizations to generate (default: 5, 0 to disable)
-
+```
