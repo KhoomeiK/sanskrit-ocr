@@ -566,9 +566,9 @@ def main():
     
     # Font options
     font = parser.add_argument_group('Font Options')
-    font.add_argument('--font-dir', type=str, default=r'C:\Users\Rahul Badhan\Documents\GitHub\sanskrit-ocr\datagen\fonts',
+    font.add_argument('--font-dir', type=str, default=r'datagen/fonts',
                     help='Directory containing font files')
-    font.add_argument('--font', type=str, default=r'C:\Users\Rahul Badhan\Documents\GitHub\sanskrit-ocr\datagen\fonts\Sharad76-Regular.otf',
+    font.add_argument('--font', type=str, default=r'Sharad76-Regular.otf',
                     help='Font filename within the font directory')
     
     # Layout options (new group)
