@@ -5,6 +5,161 @@ import random
 import math
 import argparse
 
+def _add_enhanced_degradation(background, width, height, params):
+    """Add physically accurate degradation patterns to manuscripts."""
+    # Convert to numpy array for pixel manipulation
+    bg_array = np.array(background)
+    
+    # 1. INSECT DAMAGE IMPLEMENTATION
+    if hasattr(params, 'insect_damage') and params.insect_damage > 0:
+        # Create 1-3 clustered damage paths (insects typically create trails)
+        cluster_count = int(random.randint(1, 3) * params.insect_damage)
+        
+        for _ in range(cluster_count):
+            # Determine damage path characteristics
+            edge_start = random.choice(['top', 'bottom', 'left', 'right'])
+            if edge_start == 'top':
+                start_x = random.randint(width//4, 3*width//4)
+                start_y = random.randint(0, height//10)
+            elif edge_start == 'bottom':
+                start_x = random.randint(width//4, 3*width//4)
+                start_y = random.randint(9*height//10, height-1)
+            elif edge_start == 'left':
+                start_x = random.randint(0, width//10)
+                start_y = random.randint(height//4, 3*height//4)
+            else:  # right
+                start_x = random.randint(9*width//10, width-1)
+                start_y = random.randint(height//4, 3*height//4)
+            
+            # Create path for insect damage
+            path_length = random.randint(5, 15)
+            current_x, current_y = start_x, start_y
+            path_points = [(current_x, current_y)]
+            
+            for i in range(path_length):
+                angle = random.uniform(0, 2*np.pi)
+                distance = random.randint(10, 30)
+                current_x += int(np.cos(angle) * distance)
+                current_y += int(np.sin(angle) * distance)
+                
+                # Keep within bounds
+                current_x = max(0, min(width-1, current_x))
+                current_y = max(0, min(height-1, current_y))
+                
+                path_points.append((current_x, current_y))
+            
+            # Create holes along the path
+            for path_idx in range(len(path_points)-1):
+                x1, y1 = path_points[path_idx]
+                x2, y2 = path_points[path_idx+1]
+                
+                steps = max(abs(x2-x1), abs(y2-y1))
+                if steps == 0:
+                    continue
+                
+                for step in range(steps):
+                    x = x1 + (x2-x1) * step // steps
+                    y = y1 + (y2-y1) * step // steps
+                    
+                    if random.random() > 0.7:
+                        continue
+                    
+                    hole_size = random.randint(1, 3)
+                    if random.random() < 0.1:
+                        hole_size = random.randint(3, 5)
+                    
+                    for i in range(-hole_size, hole_size+1):
+                        for j in range(-hole_size, hole_size+1):
+                            dist = np.sqrt(i**2 + j**2)
+                            
+                            if dist > hole_size:
+                                continue
+                                
+                            if 0 <= y+i < height and 0 <= x+j < width:
+                                if dist < hole_size * 0.7:
+                                    bg_array[y+i, x+j] = [255, 255, 255]
+                                else:
+                                    darkness = int(40 * (1 - (dist / hole_size)))
+                                    bg_array[y+i, x+j] = np.clip(bg_array[y+i, x+j] - darkness, 0, 255)
+    
+    # Add water damage implementation here (abbreviated for this step)
+    if hasattr(params, 'water_damage') and params.water_damage > 0:
+        # Basic water damage implementation
+        # Will be expanded in later steps
+        pass
+    
+    # Add edge deterioration implementation here (abbreviated for this step)
+    if hasattr(params, 'edge_deterioration') and params.edge_deterioration > 0:
+        # Basic edge deterioration implementation
+        # Will be expanded in later steps
+        pass
+        
+    return Image.fromarray(bg_array)
+
+def _enhance_text_layout(draw, text, font, x_position, y_position, line_index, width, font_size, params):
+    """Create more natural handwritten text appearance with advanced baseline and spacing variations."""
+    # Calculate baseline wobble
+    if params.baseline > 0:
+        # Primary wave (slow undulation across line)
+        frequency1 = random.uniform(0.5, 1.5)
+        amplitude1 = random.uniform(0.5, 1.0) * params.baseline
+        phase1 = random.uniform(0, 2*np.pi)
+        
+        # Secondary wave (faster variations)
+        frequency2 = random.uniform(3.0, 6.0)
+        amplitude2 = random.uniform(0.1, 0.3) * params.baseline
+        phase2 = random.uniform(0, 2*np.pi)
+        
+        # Calculate baseline offset
+        normalized_x = x_position / width
+        wave1 = amplitude1 * np.sin(frequency1 * 2*np.pi * normalized_x + phase1)
+        wave2 = amplitude2 * np.sin(frequency2 * 2*np.pi * normalized_x + phase2)
+        
+        baseline_offset = int(wave1 + wave2)
+    else:
+        baseline_offset = 0
+    
+    # Calculate character spacing
+    word_x_offset = int(random.uniform(-2, 2) * params.word_position)
+    word_y_offset = int(random.uniform(-1.5, 1.5) * params.word_position)
+    
+    # Create positions for individual characters
+    char_positions = []
+    x_char = x_position + word_x_offset
+    
+    for i, char in enumerate(text):
+        char_width = draw.textlength(char, font=font)
+        
+        # Position calculation
+        pos_x = x_char
+        pos_y = y_position + baseline_offset + word_y_offset
+        
+        # Character variation
+        char_x_var = random.uniform(-0.3, 0.3) * params.word_position * 0.3
+        char_y_var = random.uniform(-0.2, 0.2) * params.word_position * 0.3
+        
+        # Apply variations with constraints
+        final_x = pos_x + char_x_var
+        final_y = pos_y + char_y_var
+        
+        # Constrain positions
+        x_min = x_char - char_width * 0.1
+        x_max = x_char + char_width * 1.1
+        final_x = max(x_min, min(final_x, x_max))
+        
+        y_min = y_position - font_size * 0.2
+        y_max = y_position + font_size * 0.2
+        final_y = max(y_min, min(final_y, y_max))
+        
+        # Store position
+        char_positions.append((final_x, final_y))
+        
+        # Advance position
+        x_char += char_width
+    
+    return char_positions
+
+
 def _create_background(width, height, style, params):
     if style == "lined_paper":
         background = np.ones((height, width, 3), dtype=np.uint8) * [210, 180, 140]
@@ -90,8 +245,27 @@ def _create_background(width, height, style, params):
         
         noise = np.random.randint(0, int(8 * params.noise), (height, width, 3), dtype=np.uint8)
         background = np.clip(background - noise, 0, 255).astype(np.uint8)
+    if hasattr(params, 'vertical_lines') and hasattr(params, 'horizontal') and params.horizontal and params.vertical_lines:
+        # Left and right margin (typically 5-8% of width)
+        margin = int(width * 0.06)
+        line_width = random.randint(1, 2)
+        line_color = [60, 60, 60]  # Dark gray
+        
+        # Left vertical line
+        background[:, margin:margin+line_width, :] = line_color
+        
+        # Right vertical line
+        background[:, width-margin:width-margin+line_width, :] = line_color
     
-    return Image.fromarray(background)
+    result_img = Image.fromarray(background)
+    
+    # Apply enhanced degradation if parameters are available
+    if (hasattr(params, 'insect_damage') and params.insect_damage > 0 or
+        hasattr(params, 'water_damage') and params.water_damage > 0 or
+        hasattr(params, 'edge_deterioration') and params.edge_deterioration > 0):
+        result_img = _add_enhanced_degradation(result_img, width, height, params)
+
+    return result_img
 
 def _render_sanskrit(text, font_path, output_path, width, height, font_size, style, ink_color, params):
     img = _create_background(width, height, style, params)
@@ -103,11 +277,25 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
         # Remove newlines and treat all text as one block
         words = text.strip().replace('\n', ' ').split()
         
-        y_position = random.randint(25, 75)
-        margin = 25  # Left and right margin
+        # Initial position - adjusted for layout type
+        if hasattr(params, 'horizontal') and params.horizontal:
+            # Start text higher in the image for horizontal layout
+            y_position = random.randint(height // 8, height // 4)
+            
+            # Set wider margins to account for vertical ruling lines
+            left_margin = int(width * 0.08)
+            right_margin = int(width * 0.08)
+            
+            # Available width for text
+            available_width = width - left_margin - right_margin
+        else:
+            # Traditional vertical manuscript layout (from original code)
+            y_position = random.randint(25, 75)
+            margin = 25  # Left and right margin
+            left_margin = margin
+            right_margin = margin
+            available_width = width - 2 * margin
         
-        # Available width for text
-        available_width = width - 2 * margin
         space_width = draw.textlength(" ", font=font)
         
         current_line = []
@@ -135,68 +323,101 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
             all_lines.append(current_line)
         
         # Render all lines
-        for line in all_lines:
+        for line_index, line in enumerate(all_lines):
             # Center the line horizontally
             line_text = " ".join(line)
             line_width = draw.textlength(line_text, font=font)
-            x_position = (width - line_width) // 2
+            
+            # Adjust horizontal position based on layout
+            if hasattr(params, 'horizontal') and params.horizontal:
+                x_position = left_margin + (available_width - line_width) // 2
+            else:
+                x_position = (width - line_width) // 2
             
             baseline_offset = random.randint(-2, 2) * params.baseline
             y_line_position = y_position + baseline_offset
             
-            # Check if we've reached the bottom of the image
-            if y_line_position + font_size > height - margin:
+            # Adjust bottom margin check based on layout
+            bottom_margin = height // 8 if hasattr(params, 'horizontal') and params.horizontal else margin
+            if y_line_position + font_size > height - bottom_margin:
                 break
             
             # Render each word in the line
             x_word_position = x_position
-            for word in line:
-                word_x_offset = int(random.uniform(-1.5, 1.5) * params.word_position)
-                word_y_offset = int(random.uniform(-1, 1) * params.word_position)
-                
-                color_variation = int(random.randint(-3, 3) * params.ink_color)
-                word_color = (
-                    np.clip(ink_color[0] + color_variation, 0, 255),
-                    np.clip(ink_color[1] + color_variation, 0, 255),
-                    np.clip(ink_color[2] + color_variation, 0, 255)
-                )
-                
-                word_width = draw.textlength(word, font=font)
-                word_height = font_size * 1.2
-                
-                if params.word_angle > 0:
-                    # Apply rotation to individual word
-                    word_angle = random.uniform(-2, 2) * params.word_angle
-                    
-                    diagonal = math.sqrt(word_width**2 + word_height**2)
-                    padding = int(diagonal * 0.5)
-                    
-                    temp_width = int(diagonal + 2 * padding)
-                    temp_height = int(diagonal + 2 * padding)
-                    txt_img = Image.new('RGBA', (temp_width, temp_height), (0, 0, 0, 0))
-                    txt_d = ImageDraw.Draw(txt_img)
-                    
-                    center_x = temp_width // 2 - word_width // 2
-                    center_y = temp_height // 2 - word_height // 2
-                    txt_d.text((center_x, center_y), word, font=font, fill=word_color + (255,))
-                    
-                    rotated = txt_img.rotate(word_angle, resample=Image.BICUBIC, expand=0, 
-                                            center=(temp_width//2, temp_height//2))
-                    
-                    paste_x = int(x_word_position + word_x_offset - padding)
-                    paste_y = int(y_line_position + word_y_offset - padding)
-                    
-                    img.paste(rotated, (paste_x, paste_y), rotated)
-                else:
-                    draw.text(
-                        (x_word_position + word_x_offset, y_line_position + word_y_offset), 
-                        word, fill=word_color, font=font
+            for word_index, word in enumerate(line):
+                # Use enhanced text layout if enabled
+                if hasattr(params, 'enhanced_layout') and params.enhanced_layout:
+                    # Get character positions with enhanced layout
+                    char_positions = _enhance_text_layout(
+                        draw, word, font, x_word_position, y_line_position, 
+                        line_index, width, font_size, params
                     )
-                
-                x_word_position += word_width + space_width
+                    
+                    # Render each character individually
+                    for i, char in enumerate(word):
+                        px, py = char_positions[i]
+                        
+                        # Add color variation for natural ink appearance
+                        color_variation = int(random.randint(-3, 3) * params.ink_color)
+                        char_color = (
+                            np.clip(ink_color[0] + color_variation, 0, 255),
+                            np.clip(ink_color[1] + color_variation, 0, 255),
+                            np.clip(ink_color[2] + color_variation, 0, 255)
+                        )
+                        
+                        draw.text((px, py), char, fill=char_color, font=font)
+                    
+                    # Calculate where the next word should start
+                    word_width = draw.textlength(word, font=font)
+                    x_word_position += word_width + space_width
+                else:
+                    # Original word rendering logic
+                    word_x_offset = int(random.uniform(-1.5, 1.5) * params.word_position)
+                    word_y_offset = int(random.uniform(-1, 1) * params.word_position)
+                    
+                    color_variation = int(random.randint(-3, 3) * params.ink_color)
+                    word_color = (
+                        np.clip(ink_color[0] + color_variation, 0, 255),
+                        np.clip(ink_color[1] + color_variation, 0, 255),
+                        np.clip(ink_color[2] + color_variation, 0, 255)
+                    )
+                    
+                    word_width = draw.textlength(word, font=font)
+                    word_height = font_size * 1.2
+                    
+                    if params.word_angle > 0:
+                        # Apply rotation to individual word
+                        word_angle = random.uniform(-2, 2) * params.word_angle
+                        
+                        diagonal = math.sqrt(word_width**2 + word_height**2)
+                        padding = int(diagonal * 0.5)
+                        
+                        temp_width = int(diagonal + 2 * padding)
+                        temp_height = int(diagonal + 2 * padding)
+                        txt_img = Image.new('RGBA', (temp_width, temp_height), (0, 0, 0, 0))
+                        txt_d = ImageDraw.Draw(txt_img)
+                        
+                        center_x = temp_width // 2 - word_width // 2
+                        center_y = temp_height // 2 - word_height // 2
+                        txt_d.text((center_x, center_y), word, font=font, fill=word_color + (255,))
+                        
+                        rotated = txt_img.rotate(word_angle, resample=Image.BICUBIC, expand=0, 
+                                                center=(temp_width//2, temp_height//2))
+                        
+                        paste_x = int(x_word_position + word_x_offset - padding)
+                        paste_y = int(y_line_position + word_y_offset - padding)
+                        
+                        img.paste(rotated, (paste_x, paste_y), rotated)
+                    else:
+                        draw.text(
+                            (x_word_position + word_x_offset, y_line_position + word_y_offset), 
+                            word, fill=word_color, font=font
+                        )
+                    
+                    x_word_position += word_width + space_width
             
-            # Move to next line
-            line_spacing_factor = 1.0 + (random.uniform(-0.1, 0.1) * params.line_spacing)
+            # Move to next line with reduced randomness for more consistent spacing
+            line_spacing_factor = 1.0 + (random.uniform(-0.05, 0.05) * params.line_spacing)
             y_position += int(font_size * 1.2 * line_spacing_factor)
         
         img.save(output_path)
@@ -345,10 +566,20 @@ def main():
     
     # Font options
     font = parser.add_argument_group('Font Options')
-    font.add_argument('--font-dir', type=str, default='datagen/fonts',
+    font.add_argument('--font-dir', type=str, default=r'C:\Users\Rahul Badhan\Documents\GitHub\sanskrit-ocr\datagen\fonts',
                     help='Directory containing font files')
-    font.add_argument('--font', type=str, default='Sharad76-Regular.otf',
+    font.add_argument('--font', type=str, default=r'C:\Users\Rahul Badhan\Documents\GitHub\sanskrit-ocr\datagen\fonts\Sharad76-Regular.otf',
                     help='Font filename within the font directory')
+    
+    # Layout options (new group)
+    layout = parser.add_argument_group('Layout Options', 
+                                     'Controls for manuscript layout')
+    layout.add_argument('--horizontal', action='store_true', default=False,
+                       help='Use horizontal manuscript layout (default: False)')
+    layout.add_argument('--vertical-lines', action='store_true', default=True,
+                       help='Add vertical ruling lines for horizontal layout (default: True)')
+    layout.add_argument('--enhanced-layout', action='store_true', default=False,
+                       help='Use enhanced text layout with natural character spacing (default: False)')
     
     # Generation-level augmentations (background + word)
     gen = parser.add_argument_group('Generation-Level Augmentations', 
@@ -364,6 +595,14 @@ def main():
                    help='Number of stains (0.0-1.0)')
     gen.add_argument('--stain-intensity', type=float, default=0.5,
                    help='Intensity of stain effects (0.0-1.0)')
+    
+    # Enhanced degradation options (new)
+    gen.add_argument('--insect-damage', type=float, default=0.0,
+                   help='Intensity of insect damage (0.0-1.0)')
+    gen.add_argument('--water-damage', type=float, default=0.0,
+                   help='Intensity of water damage (0.0-1.0)')
+    gen.add_argument('--edge-deterioration', type=float, default=0.0,
+                   help='Edge deterioration intensity (0.0-1.0)')
     
     # Word-level options
     gen.add_argument('--word-position', type=float, default=0.6,
@@ -403,6 +642,12 @@ def main():
     params = parser.parse_args()
     
     font_path = os.path.join(params.font_dir, params.font)
+    
+    # Print layout information if horizontal is enabled
+    if params.horizontal:
+        print("Using horizontal manuscript layout")
+        if params.vertical_lines:
+            print("Adding vertical ruling lines")
     
     _generate_sanskrit_samples(
         text=sanskrit_text,
