@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="sa">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{font-family:"SanskritFont";src:url("{{ font_path }}") format("opentype");}
+@page{size:{{ page_width }}mm {{ page_height }}mm;margin:0;}
+html,body{margin:0;height:100%;}
+
+body{
+  background:
+    radial-gradient(#0001 1px,transparent 1px)0 0/4px 4px,
+    {{ parchment }};
+  font-family:"SanskritFont",serif;
+  color:{{ ink }};
+  font-size:{{ font_size }}pt;
+  line-height:{{ line_height }};
+  -weasy-hyphens:auto;
+}
+
+/* fixed vertical stripes on every PDF page */
+.stripe-outer,
+.stripe-inner{position:fixed;top:0;bottom:0;background:#000;}
+
+.stripe-outer.left { left: {{ margin_mm }}mm; width: {{ stripe_thick }}mm; }
+.stripe-outer.right{ right:{{ margin_mm }}mm; width: {{ stripe_thick }}mm; }
+
+.stripe-inner.left { left: {{ inner_left_mm }}mm; width: {{ stripe_thick }}mm; }
+.stripe-inner.right{ right:{{ inner_right_mm }}mm; width: {{ stripe_thick }}mm; }
+
+/* page-number safely inside outer margin */
+.page-no{
+  position:fixed; top:2mm; font-size:60%; background:none; color:{{ ink }};
+  {{ page_side }}:{{ page_no_mm }}mm;
+}
+
+/* text container never touches stripes */
+.text{
+  margin-left: {{ text_margin_mm }}mm;
+  margin-right:{{ text_margin_mm }}mm;
+  padding:{{ inner_pad }}mm;
+  box-sizing:border-box;
+}
+
+/* per-paragraph spacing & scaling */
+.text p {
+  margin-bottom: {{ para_spacing }}mm;
+  line-height: {{ line_height }};
+}
+.text p.large {
+  font-size: {{ font_size * paragraph_scale }}pt;
+}
+</style>
+</head>
+<body>
+  <div class="stripe-outer left"></div>
+  <div class="stripe-inner left"></div>
+  <div class="stripe-outer right"></div>
+  <div class="stripe-inner right"></div>
+
+  {% if show_page_no %}
+    <div class="page-no">{{ page_no_sa }}</div>
+  {% endif %}
+
+  <div class="text">
+    {% for para in paragraphs %}
+      <p class="{{ 'large' if para.large else '' }}">{{ para.text }}</p>
+    {% endfor %}
+  </div>
+</body>
+</html>

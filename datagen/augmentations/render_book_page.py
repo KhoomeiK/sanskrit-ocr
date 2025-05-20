@@ -19,19 +19,23 @@ WEIGHTS = [0.25,      0.25,       0.25,      0.25]
 
 EFFECTS = {
     "blur":             (0.3, lambda: dict(radius=random.choice([3,5,7]))),
-    "bleed_through":    (0.25, lambda: dict(alpha=round(random.uniform(0.5,0.9),2),
+    "bleed_through":    (0.15, lambda: dict(alpha=round(random.uniform(0.7,0.9),2),
                                            offset_y=random.randint(-10,10))),
-    "salt":             (0.25, lambda: dict(amount=round(random.uniform(0.01,0.05),3))),
-    # "pepper":           (0.4, lambda: dict(amount=round(random.uniform(0.01,0.05),3))),
-    "salt_then_pepper": (0.25, lambda: dict(salt_amount=0.05, pepper_amount=0.03)),
-    "morphology":       (0.75, lambda: dict(
-                             operation=random.choice(["open","close","dilate","erode"]),
-                             kernel_shape=(3,3),
-                             kernel_type=random.choice([
-                                 "ones","upper_triangle","lower_triangle",
-                                 "x","plus","ellipse"
-                             ])
-                         )),
+    "salt":             (0.2, lambda: dict(amount=round(random.uniform(0.01,0.05),3))),
+    "pepper":           (0.2, lambda: dict(amount=0.03)),
+    # "salt_then_pepper": (0.25, lambda: dict(salt_amount=0.05, pepper_amount=0.03)),
+    "morphology":       (0.75, lambda: (
+                            lambda kernel_type: dict(
+                                operation=random.choices(
+                                    ["open", "close", "dilate", "erode"],
+                                    weights=[1, 1, 1, 2]  # Favor 'erode'
+                                )[0],
+                                kernel_type=kernel_type,
+                                kernel_shape=(
+                                    (1, size) if random.choice([True, False]) else (size, 1)
+                                ) if kernel_type == "ones" else (size, size)
+                            )
+                        )(kernel_type := random.choice(["ones", "upper_triangle", "lower_triangle", "x", "plus", "ellipse"])))
 }
 
 def _rand_phrase(text, w1=1, w2=3, min_len=3):

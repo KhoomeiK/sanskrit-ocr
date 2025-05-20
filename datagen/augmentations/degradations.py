@@ -1,7 +1,7 @@
 # ---------------------------------------------------------
 # Portions of this file are adapted from Microsoft Genalog
 # (https://github.com/microsoft/genalog) © Microsoft Corp.
-# MIT License – see original repository for details.
+# MIT License – see original repository for details.
 # ---------------------------------------------------------
 from math import floor
 import cv2
@@ -17,9 +17,13 @@ def overlay(src, background):
     return cv2.bitwise_and(src, background).astype(np.uint8)
 
 def translation(src, offset_x, offset_y):
-    rows, cols = src.shape
+    """
+    Shift the image in x, y direction, preserving multi-channel images.
+    """
+    rows, cols = src.shape[:2]
     M = np.float32([[1, 0, offset_x], [0, 1, offset_y]])
-    return cv2.warpAffine(src, M, (cols, rows), borderValue=255).astype(np.uint8)
+    dst = cv2.warpAffine(src, M, (cols, rows), borderValue=255)
+    return dst.astype(np.uint8)
 
 def bleed_through(src, background=None, alpha=0.8, gamma=0, offset_x=0, offset_y=5):
     if background is None:
@@ -30,14 +34,23 @@ def bleed_through(src, background=None, alpha=0.8, gamma=0, offset_x=0, offset_y
 
 def pepper(src, amount=0.05):
     dst = src.copy()
-    noise = np.random.random(src.shape)
-    dst[noise < amount] = 0
+    noise = np.random.random(src.shape[:2])
+    # broadcast noise mask across channels if needed
+    mask = noise < amount
+    if dst.ndim == 3:
+        dst[mask] = 0
+    else:
+        dst[mask] = 0
     return dst.astype(np.uint8)
 
 def salt(src, amount=0.05):
     dst = src.copy()
-    noise = np.random.random(src.shape)
-    dst[noise < amount] = 255
+    noise = np.random.random(src.shape[:2])
+    mask = noise < amount
+    if dst.ndim == 3:
+        dst[mask] = 255
+    else:
+        dst[mask] = 255
     return dst.astype(np.uint8)
 
 def salt_then_pepper(src, salt_amount=0.1, pepper_amount=0.05):
@@ -46,7 +59,8 @@ def salt_then_pepper(src, salt_amount=0.1, pepper_amount=0.05):
 def pepper_then_salt(src, pepper_amount=0.05, salt_amount=0.1):
     return salt(pepper(src, pepper_amount), salt_amount)
 
-# ───── morphology helpers ───────────────────────────────
+# morphology helpers
+
 def create_2D_kernel(shape, ktype="ones"):
     r, c = shape
     if ktype == "ones":
@@ -67,6 +81,7 @@ def create_2D_kernel(shape, ktype="ones"):
     else:
         raise ValueError("Bad kernel_type")
     return k.astype(np.uint8)
+
 
 def open_morph(src, kernel):   return cv2.morphologyEx(src, cv2.MORPH_OPEN,  kernel)
 def close_morph(src, kernel):  return cv2.morphologyEx(src, cv2.MORPH_CLOSE, kernel)
