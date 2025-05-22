@@ -1,9 +1,11 @@
+import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 import os
 import random
 import math
 import argparse
+from math import pi
 
 # Global default parameters
 DEFAULT_PARAMS = {
@@ -43,6 +45,21 @@ DEFAULT_PARAMS = {
 }
 
 def _create_background(width, height, style, params):
+    # Check if image directory is provided and use image background if available
+    if params.image_dir and os.path.exists(params.image_dir):
+        image_files = [f for f in os.listdir(params.image_dir) 
+                      if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+        if image_files:
+            img_path = os.path.join(params.image_dir, random.choice(image_files))
+            try:
+                bg_img = Image.open(img_path).convert('RGB')
+                # Resize the image to match required dimensions
+                bg_img = bg_img.resize((width, height), Image.LANCZOS)
+                return bg_img
+            except Exception as e:
+                print(f"Error loading background image {img_path}: {e}")
+                # Fall back to synthetic backgrounds if image loading fails
+    
     if style == "lined_paper":
         background = np.ones((height, width, 3), dtype=np.uint8) * [210, 180, 140]
         
@@ -247,6 +264,73 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
         traceback.print_exc()
         return None
 
+# ────────── Page warping helpers ──────────
+
+def cylindrical_edge_warp(pil_img, side="left", strength=0.6, warp_portion=0.45):
+    """
+    Cylindrical bend on one side of the page.
+    side         : "left" or "right"
+    strength     : +ve bulges out, –ve bulges in. Magnitude ≈ tan(max_angle/2)
+    warp_portion : fraction (0–1) of width from that edge to bend
+    """
+    img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    h, w = img.shape[:2]
+
+    # width of the curved strip
+    W = int(warp_portion * w)
+    # fake focal length = radius of cylinder (pick something like the strip width)
+    R = W / strength if strength != 0 else 1e9
+
+    # Build meshgrid of pixel coords
+    X, Y = np.meshgrid(np.arange(w), np.arange(h))
+    map_x = X.astype(np.float32).copy()
+    map_y = Y.astype(np.float32).copy()
+
+    if side == "left":
+        strip = X < W
+        dx = W - X[strip]               # distance *into* the page from edge
+    else:                               # right
+        strip = X > (w - W)
+        dx = X[strip] - (w - W)
+
+    # angle on cylinder surface for those pixels
+    theta = dx / R                      # radians
+    # horizontal mapping (cylinder unrolled: x' = R*sinθ)
+    displacement = R * np.sin(theta) - dx
+    map_x[strip] += displacement
+
+    # vertical scaling so text lines aren't stretched
+    scale_y = np.cos(theta)
+    map_y[strip] = (Y[strip] - h/2) / scale_y + h/2
+
+    warped = cv2.remap(img, map_x, map_y, interpolation=cv2.INTER_CUBIC,
+                   borderMode=cv2.BORDER_REPLICATE)
+    return Image.fromarray(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB))
+
+
+def washboard_warp(pil_img, amplitude=8, wavelength=120, phase=0.0,
+                   decay_from_top=True):
+    """Vertical sine ripples that run horizontally across the page."""
+    img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    h, w = img.shape[:2]
+
+    # build a vector of vertical offsets – one per column
+    x = np.arange(w, dtype=np.float32)
+    dy = amplitude * np.sin(2*pi*x / wavelength + phase)
+
+    if decay_from_top:
+        atten = np.linspace(1, 0.2, h, dtype=np.float32)[:, None]  # fade as y increases
+    else:
+        atten = 1.0
+    # broadcast to full map
+    map_x, map_y = np.meshgrid(x, np.arange(h, dtype=np.float32))
+    map_y += dy * atten
+
+    warped = cv2.remap(img, map_x, map_y, cv2.INTER_CUBIC,
+                   borderMode=cv2.BORDER_REPLICATE)
+    return Image.fromarray(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB))
+# ────────────────────────────────────────
+
 def _apply_postprocessing(original_image, output_dir, base_filename, params):
     all_images = [original_image]
     transforms = []
@@ -283,6 +367,21 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
                                             random.uniform(params["noise_min"], params["noise_max"]))))
     transforms.append(("blur", lambda img: blur_image(img, 
                                             random.uniform(params["blur_min"], params["blur_max"]))))
+    
+
+    # Add new page warping transformations
+    transforms.append(("washboard", lambda img: washboard_warp(
+        img,
+        amplitude=random.uniform(6, 12),
+        wavelength=random.uniform(90, 150),
+        phase=random.uniform(0, 2*pi),
+        decay_from_top=random.choice([True, False]))))
+        
+    transforms.append(("cylinder", lambda img: cylindrical_edge_warp(
+        img,
+        side=random.choice(["left", "right"]),
+        strength=random.uniform(0.4, 0.8) * random.choice([1, -1]),
+        warp_portion=random.uniform(0.35, 0.5))))
     
     if params["all_transforms"]:
         selected_transforms = transforms
@@ -417,6 +516,8 @@ def main():
                    help='Number of stains (0.0-1.0)')
     gen.add_argument('--stain-intensity', type=float, default=DEFAULT_PARAMS['stain_intensity'],
                    help='Intensity of stain effects (0.0-1.0)')
+    gen.add_argument('--image-dir', type=str, default='',
+                    help='Directory to randomly sample background image from. If left empty, no image backgrounds will be used.')
     
     # Word-level options
     gen.add_argument('--word-position', type=float, default=DEFAULT_PARAMS['word_position'],
