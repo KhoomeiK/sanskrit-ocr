@@ -3,19 +3,16 @@ from pathlib import Path
 from typing import List, Optional, Union
 from PIL import Image
 
-from render_text import generate_sanskrit_samples
-from render_book_page import generate_book_pages
-from render_parchment_leaf import generate_parchment_leaves
+from .rendering import render_image
 
 # Default parameters
 DEFAULT_PARAMS = {
     'output_dir': 'output_random',
-    'renderer_weights': [0.33, 0.33, 0.34],  # Equal weights for each renderer
-    'renderers': [
-        ('text', generate_sanskrit_samples),
-        ('book', generate_book_pages),
-        ('parchment', generate_parchment_leaves)
-    ]
+    'renderer_weights': {
+        'text': 0.33,
+        'book': 0.33,
+        'parchment': 0.34,
+    }
 }
 
 def generate_random_samples(
@@ -49,25 +46,23 @@ def generate_random_samples(
         output_dir.mkdir(exist_ok=True)
     
     all_images = []
-    
+
+    weights = params.get('renderer_weights')
+
     for i in range(num_samples):
-        # Randomly select a renderer
-        renderer_name, renderer_func = random.choices(
-            params['renderers'],
-            weights=params['renderer_weights'],
-            k=1
-        )[0]
-        
-        # Create subdirectory for this renderer if output_dir is provided
         if output_dir:
-            renderer_dir = output_dir / f"{i:03d}_{renderer_name}"
-            renderer_dir.mkdir(exist_ok=True)
+            img_dir = output_dir / f"{i:03d}"
+            img_dir.mkdir(exist_ok=True)
         else:
-            renderer_dir = None
-        
-        # Generate images using selected renderer
-        images = renderer_func(text, output_dir=renderer_dir)
-        
+            img_dir = None
+
+        images = render_image(
+            text,
+            renderer="random",
+            output_dir=str(img_dir) if img_dir else None,
+            weights=weights,
+        )
+
         if not output_dir:
             all_images.extend(images)
     

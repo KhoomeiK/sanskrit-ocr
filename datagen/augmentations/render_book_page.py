@@ -8,34 +8,9 @@ from pdf2image import convert_from_path
 from tqdm import tqdm
 from weasyprint import HTML
 
-size = 2
-# Default parameters
-DEFAULT_PARAMS = {
-    'output_dir': 'output',
-    'image_dpi': 300,
-    'no_degrade_prob': 0.1,
-    'layouts': ["vanilla", "columns", "footnote", "subheading"],
-    'layout_weights': [0.25, 0.25, 0.25, 0.25],
-    'effects': {
-        "blur": (0.3, lambda: dict(radius=random.choice([3,5,7]))),
-        "bleed_through": (0.15, lambda: dict(alpha=round(random.uniform(0.7,0.9),2),
-                                           offset_y=random.randint(-10,10))),
-        "salt": (0.2, lambda: dict(amount=round(random.uniform(0.01,0.05),3))),
-        "pepper": (0.2, lambda: dict(amount=0.03)),
-        "morphology": (0.75, lambda: (
-                            lambda kernel_type: dict(
-                                operation=random.choices(
-                                    ["open", "close", "dilate", "erode"],
-                                    weights=[1, 1, 1, 2]  # Favor 'erode'
-                                )[0],
-                                kernel_type=kernel_type,
-                                kernel_shape=(
-                                    (1, size) if random.choice([True, False]) else (size, 1)
-                                ) if kernel_type == "ones" else (size, size)
-                            )
-                        )(kernel_type := random.choice(["ones", "upper_triangle", "lower_triangle", "x", "plus", "ellipse"])))
-    }
-}
+from .renderer_defaults import BOOK_PAGE_DEFAULTS, merge_params
+
+DEFAULT_PARAMS = BOOK_PAGE_DEFAULTS
 
 def _rand_phrase(text, w1=1, w2=3, min_len=3):
     words=[w.strip(string.punctuation+"“”’‘\"") for w in text.split()]
@@ -104,11 +79,8 @@ def generate_book_pages(text, output_dir=None, params=None):
         If output_dir is None: list of PIL.Image objects
         If output_dir is provided: None (images are saved to disk)
     """
-    # Use default params if none provided, updating with any provided values
-    if params is None:
-        params = DEFAULT_PARAMS.copy()
-    else:
-        params = {**DEFAULT_PARAMS, **params}
+    # Merge provided params with defaults
+    params = merge_params(DEFAULT_PARAMS, params)
     
     # Create output directory if specified
     if output_dir:
