@@ -8,23 +8,21 @@ from pdf2image import convert_from_path
 from tqdm import tqdm
 from weasyprint import HTML
 
-
-TEXT = open("sample_sa.txt", encoding="utf-8").read().strip()
-OUTPUT_DIR = pathlib.Path("output"); OUTPUT_DIR.mkdir(exist_ok=True)
-NO_DEGRADE_PROB = 0.1
-IMAGE_DPI = 300
-
-LAYOUTS = ["vanilla","columns","footnote","subheading"]
-WEIGHTS = [0.25,      0.25,       0.25,      0.25]
-
-EFFECTS = {
-    "blur":             (0.3, lambda: dict(radius=random.choice([3,5,7]))),
-    "bleed_through":    (0.15, lambda: dict(alpha=round(random.uniform(0.7,0.9),2),
+size = 2
+# Default parameters
+DEFAULT_PARAMS = {
+    'output_dir': 'output',
+    'image_dpi': 300,
+    'no_degrade_prob': 0.1,
+    'layouts': ["vanilla", "columns", "footnote", "subheading"],
+    'layout_weights': [0.25, 0.25, 0.25, 0.25],
+    'effects': {
+        "blur": (0.3, lambda: dict(radius=random.choice([3,5,7]))),
+        "bleed_through": (0.15, lambda: dict(alpha=round(random.uniform(0.7,0.9),2),
                                            offset_y=random.randint(-10,10))),
-    "salt":             (0.2, lambda: dict(amount=round(random.uniform(0.01,0.05),3))),
-    "pepper":           (0.2, lambda: dict(amount=0.03)),
-    # "salt_then_pepper": (0.25, lambda: dict(salt_amount=0.05, pepper_amount=0.03)),
-    "morphology":       (0.75, lambda: (
+        "salt": (0.2, lambda: dict(amount=round(random.uniform(0.01,0.05),3))),
+        "pepper": (0.2, lambda: dict(amount=0.03)),
+        "morphology": (0.75, lambda: (
                             lambda kernel_type: dict(
                                 operation=random.choices(
                                     ["open", "close", "dilate", "erode"],
@@ -36,6 +34,7 @@ EFFECTS = {
                                 ) if kernel_type == "ones" else (size, size)
                             )
                         )(kernel_type := random.choice(["ones", "upper_triangle", "lower_triangle", "x", "plus", "ellipse"])))
+    }
 }
 
 def _rand_phrase(text, w1=1, w2=3, min_len=3):
@@ -59,7 +58,7 @@ def _build_html(env, ctx):
     reset = f'<style>@page{{counter-reset: page {ctx["page_start"]-1};}}</style>'
     return html.replace("</head>", reset + "</head>")
 
-def _pdf_to_pngs(pdf_path, base_name, dpi=IMAGE_DPI):
+def _pdf_to_pngs(pdf_path, base_name, dpi=300):
     pngs = []
     for i, page in enumerate(convert_from_path(pdf_path, dpi=dpi)):
         fname = f"{base_name}_{i:02d}.png"
@@ -67,9 +66,9 @@ def _pdf_to_pngs(pdf_path, base_name, dpi=IMAGE_DPI):
         pngs.append(pathlib.Path(fname))
     return pngs
 
-def _choose_effects():
+def _choose_effects(effects):
     chain = []
-    for name, (prob, gen) in EFFECTS.items():
+    for name, (prob, gen) in effects.items():
         if random.random() < prob:
             chain.append((getattr(dg, name), gen()))
     return chain
@@ -79,11 +78,11 @@ def _apply_chain(img, chain):
         img = fn(img, **params)
     return img
 
-def _degrade_and_cleanup(png_path):
-    if random.random() < NO_DEGRADE_PROB:
+def _degrade_and_cleanup(png_path, no_degrade_prob, effects):
+    if random.random() < no_degrade_prob:
         return png_path  # keep clean
     img = cv2.imread(str(png_path), cv2.IMREAD_GRAYSCALE)
-    chain = _choose_effects()
+    chain = _choose_effects(effects)
     if not chain:
         return png_path
     out = _apply_chain(img, chain)
@@ -92,60 +91,112 @@ def _degrade_and_cleanup(png_path):
     png_path.unlink()  # remove the clean version
     return deg
 
-def gen_images(n):
+def generate_book_pages(text, output_dir=None, params=None):
+    """
+    Generate book page images from Sanskrit text.
+    
+    Args:
+        text (str): The Sanskrit text to render
+        output_dir (str, optional): Directory to save images. If None, images are returned in memory
+        params (dict, optional): Parameters to override defaults
+        
+    Returns:
+        If output_dir is None: list of PIL.Image objects
+        If output_dir is provided: None (images are saved to disk)
+    """
+    # Use default params if none provided, updating with any provided values
+    if params is None:
+        params = DEFAULT_PARAMS.copy()
+    else:
+        params = {**DEFAULT_PARAMS, **params}
+    
+    # Create output directory if specified
+    if output_dir:
+        output_dir = pathlib.Path(output_dir)
+        output_dir.mkdir(exist_ok=True)
+    
     env = _jinja_env()
     final_images = []
-    for i in tqdm(range(n)):
-        mode = random.choices(LAYOUTS, weights=WEIGHTS, k=1)[0]
-        w,h = (120,180)
-        paras = [p.strip() for p in TEXT.split("\n\n") if p.strip()]
-        ctx = dict(
-            font_path=str(_choose_font()),
-            chapter_title=_rand_phrase(TEXT,2,3),
-            page_number_pos=random.choice(["top","bottom"]),
-            page_side=random.choice(["left","right"]),
-            mode=mode,
-            paragraphs=paras,
-            column_gap=random.randint(6,10),
-            column_rule_width=round(random.uniform(0.3,0.6),2),
-            subheading=_rand_phrase(TEXT,2,3),
-            subhead_at=random.randint(1, max(1,len(paras)//2)),
-            footnotes=_rand_footnotes(TEXT),
-            margin_mm=random.randint(12,20),
-            footnote_size=round(random.uniform(8,9),2),
-            footnote_rule=round(random.uniform(0.8,1.2),2),
-            font_size=round(random.uniform(8,12),2),
-            line_height=round(random.uniform(1.25,1.5),2),
-            header_size=round(random.uniform(10,12),2),
-            weight_title=random.choice([500,700]),
-            weight_body=random.choice([300,700]),
-            weight_pageno=random.choice([400,500]),
-            page_width=w, page_height=h,
-            page_start=random.randint(1,999)
-        )
-        base = OUTPUT_DIR / f"{i:03d}-{mode}"
-        pdf_file = str(base) + ".pdf"
-        html = _build_html(env, ctx)
-        HTML(string=html, base_url="templates").write_pdf(pdf_file)
-        pngs = _pdf_to_pngs(pdf_file, str(base))
-        pathlib.Path(pdf_file).unlink()
-        for pg in pngs:
-            final_images.append(_degrade_and_cleanup(pg))
-
-    frames = []
-    for p in sorted(final_images):
-        img = imageio.imread(str(p))
-        if img.ndim == 2:
-            img = np.stack([img, img, img], axis=-1)
-        elif img.ndim == 3 and img.shape[2] == 4:
-            img = img[..., :3]
-        frames.append(img)
-    gif = OUTPUT_DIR / "showcase.gif"
-    imageio.mimsave(str(gif), frames, duration=250)
+    
+    # Split text into paragraphs
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    
+    # Generate one page
+    mode = random.choices(params['layouts'], weights=params['layout_weights'], k=1)[0]
+    w,h = (120,180)
+    
+    ctx = dict(
+        font_path=str(_choose_font()),
+        chapter_title=_rand_phrase(text,2,3),
+        page_number_pos=random.choice(["top","bottom"]),
+        page_side=random.choice(["left","right"]),
+        mode=mode,
+        paragraphs=paras,
+        column_gap=random.randint(6,10),
+        column_rule_width=round(random.uniform(0.3,0.6),2),
+        subheading=_rand_phrase(text,2,3),
+        subhead_at=random.randint(1, max(1,len(paras)//2)),
+        footnotes=_rand_footnotes(text),
+        margin_mm=random.randint(12,20),
+        footnote_size=round(random.uniform(8,9),2),
+        footnote_rule=round(random.uniform(0.8,1.2),2),
+        font_size=round(random.uniform(8,12),2),
+        line_height=round(random.uniform(1.25,1.5),2),
+        header_size=round(random.uniform(10,12),2),
+        weight_title=random.choice([500,700]),
+        weight_body=random.choice([300,700]),
+        weight_pageno=random.choice([400,500]),
+        page_width=w, page_height=h,
+        page_start=random.randint(1,999)
+    )
+    
+    base = output_dir / "book_page" if output_dir else pathlib.Path("book_page")
+    pdf_file = str(base) + ".pdf"
+    html = _build_html(env, ctx)
+    HTML(string=html, base_url="templates").write_pdf(pdf_file)
+    
+    pngs = _pdf_to_pngs(pdf_file, str(base), dpi=params['image_dpi'])
+    pathlib.Path(pdf_file).unlink()
+    
+    for pg in pngs:
+        final_image = _degrade_and_cleanup(pg, params['no_degrade_prob'], params['effects'])
+        if output_dir:
+            final_images.append(final_image)
+        else:
+            img = imageio.imread(str(final_image))
+            if img.ndim == 2:
+                img = np.stack([img, img, img], axis=-1)
+            elif img.ndim == 3 and img.shape[2] == 4:
+                img = img[..., :3]
+            final_images.append(img)
+            final_image.unlink()  # Clean up temporary file
+    
+    if output_dir:
+        # Create showcase GIF
+        frames = []
+        for p in sorted(final_images):
+            img = imageio.imread(str(p))
+            if img.ndim == 2:
+                img = np.stack([img, img, img], axis=-1)
+            elif img.ndim == 3 and img.shape[2] == 4:
+                img = img[..., :3]
+            frames.append(img)
+        gif = output_dir / "showcase.gif"
+        imageio.mimsave(str(gif), frames, duration=250)
+        return None
+    else:
+        return final_images
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--n", type=int, default=10,
                         help="number of images to generate")
+    parser.add_argument("--output-dir", type=str, default=DEFAULT_PARAMS['output_dir'],
+                        help="output directory for generated images")
     args = parser.parse_args()
-    gen_images(args.n)
+    
+    # Read sample text
+    text = open("sample_sa.txt", encoding="utf-8").read().strip()
+    
+    # Generate images
+    generate_book_pages(text, output_dir=args.output_dir)

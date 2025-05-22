@@ -13,6 +13,13 @@ pyarrow = "^16.0"
 datasets = "^3.5"
 setuptools = "^80.3"
 tables = "3.9.2"
+jinja2 = "^3.1.6"
+tqdm = "^4.67.1"
+pdf2image = "^1.17.0"
+opencv-python = "^4.11.0.86"
+imageio = "^2.37.0"
+pydyf = "0.10.0"
+weasyprint = "62.0"
 
 [build-system]
 requires = ["poetry-core"]
