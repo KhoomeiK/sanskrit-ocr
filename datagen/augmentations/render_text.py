@@ -7,42 +7,10 @@ import math
 import argparse
 from math import pi
 
-# Global default parameters
-DEFAULT_PARAMS = {
-    # Basic options
-    'width': 400,
-    'height': 320,
-    'base_images': 1,
-    
-    # Font options
-    'font_dir': '/home/ubuntu/sanskrit-ocr/datagen/fonts',
-    'font': 'Sharad76-Regular.otf',
-    
-    # Generation-level augmentations
-    'noise': 0.7,
-    'aging': 0.6,
-    'texture': 0.7,
-    'stains': 0.6,
-    'stain_intensity': 0.5,
-    
-    # Word-level options
-    'word_position': 0.6,
-    'ink_color': 0.5,
-    'line_spacing': 0.4,
-    'baseline': 0.3,
-    'word_angle': 0.0,
-    
-    # Post-processing options
-    'apply_transforms': True,
-    'all_transforms': False,
-    'rotation_max': 5.0,
-    'brightness_var': 0.2,
-    'contrast_var': 0.2,
-    'noise_min': 0.01,
-    'noise_max': 0.05,
-    'blur_min': 0.5,
-    'blur_max': 1.0
-}
+from .renderer_defaults import TEXT_DEFAULTS, merge_params
+
+# Alias for backwards compatibility
+DEFAULT_PARAMS = TEXT_DEFAULTS
 
 def _create_background(width, height, style, params):
     # Check if image directory is provided and use image background if available
@@ -410,12 +378,9 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
     return all_images
 
 def generate_sanskrit_samples(text, font_path=None, output_dir=None, params=None):
-    # Use default params if none provided, updating with any provided values
-    if params is None:
-        params = DEFAULT_PARAMS.copy()
-    else:
-        # Create a copy of default params and update with provided values
-        params = {**DEFAULT_PARAMS, **params}
+    """Render Sanskrit text with augmentations."""
+    # Merge provided params with defaults
+    params = merge_params(DEFAULT_PARAMS, params)
     
     # Set default font path if not provided
     if font_path is None:

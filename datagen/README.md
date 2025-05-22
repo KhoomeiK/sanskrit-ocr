@@ -16,3 +16,13 @@ You'll also need the following packages installed for synthetic data:
 
 `pip install weasyprint jinja2 tqdm pdf2image opencv-python imageio pydyf==0.10.0`
 
+## Rendering helper
+
+`datagen/augmentations/rendering.py` exposes a `render_image(text, renderer="random")`
+function that picks a renderer at random and applies its augmentations. Use this
+in your dataset scripts to keep renderer management simple.
+
+Default parameter dictionaries for each renderer are stored in
+`datagen/augmentations/renderer_defaults.py`. Pass a ``params`` dict to
+``render_image`` or the specific renderer to override any of these values.
+

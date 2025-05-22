@@ -1,7 +1,8 @@
 import os
 import json
 from PIL import Image
-from render_text import generate_sanskrit_samples  # implement or import this function
+
+from .rendering import render_image
 
 
 def chunked_reader(f, chunk_size):
@@ -28,7 +29,7 @@ def main():
         for idx in range(NUM_SAMPLES):
             lines = next(reader)
             text = " ।\n".join(lines) + "।।"
-            images = generate_sanskrit_samples(text)
+            images = render_image(text, renderer="random")
             if not images:
                 print(f"[WARN] no images for sample {idx}")
                 continue
