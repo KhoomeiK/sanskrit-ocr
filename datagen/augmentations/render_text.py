@@ -46,11 +46,11 @@ DEFAULT_PARAMS = {
 
 def _create_background(width, height, style, params):
     # Check if image directory is provided and use image background if available
-    if params.image_dir and os.path.exists(params.image_dir):
-        image_files = [f for f in os.listdir(params.image_dir) 
+    if params['image_dir'] and os.path.exists(params['image_dir']):
+        image_files = [f for f in os.listdir(params['image_dir']) 
                       if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         if image_files:
-            img_path = os.path.join(params.image_dir, random.choice(image_files))
+            img_path = os.path.join(params['image_dir'], random.choice(image_files))
             try:
                 bg_img = Image.open(img_path).convert('RGB')
                 # Resize the image to match required dimensions
@@ -367,7 +367,7 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
                                             random.uniform(params["noise_min"], params["noise_max"]))))
     transforms.append(("blur", lambda img: blur_image(img, 
                                             random.uniform(params["blur_min"], params["blur_max"]))))
-  
+    
     # Add new page warping transformations
     transforms.append(("washboard", lambda img: washboard_warp(
         img,
@@ -382,7 +382,7 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
         strength=random.uniform(0.4, 0.8) * random.choice([1, -1]),
         warp_portion=random.uniform(0.35, 0.5))))
     
-    if params.all_transforms:
+    if params["all_transforms"]:
         selected_transforms = transforms
     else:
         n_transforms = random.randint(1, min(3, len(transforms)))

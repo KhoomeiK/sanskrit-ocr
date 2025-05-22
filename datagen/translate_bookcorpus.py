@@ -49,26 +49,6 @@ else:
     san_arr = h5.create_vlarray(group, "sanskrit", atom=tb.VLUnicodeAtom())
     existing_rows = 0
 
-# ─────────────────────── vLLM initialisation ───────────────────── #
-print(f"[{dt.datetime.now():%F %T}] → Loading Gemma …")
-llm = LLM(
-    model=args.model,
-    tensor_parallel_size=args.tp,
-    pipeline_parallel_size=1,
-    dtype="bfloat16",
-    max_model_len=4096,
-    enable_chunked_prefill=True,
-    gpu_memory_utilization=0.90,
-    trust_remote_code=True,
-)
-
-prompt_tmpl = (
-    "Translate the following English text to Sanskrit. Return only one Devanagari Sanskrit translation wrapped in triple backticks. Do NOT return any English.\n\n"
-    "English:\n```\n{passage}\n```\n\nSanskrit:"
-)
-
-sampling = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=1024, n=1)
-
 # ─────────────────────── dataset streaming ─────────────────────── #
 ds_logging.set_verbosity_error()
 
@@ -98,13 +78,6 @@ dataset_iter = iter(
         trust_remote_code=True,
     ).skip(existing_rows)
 )
-
-# fast-forward past rows we already translated
-for _ in range(existing_rows):
-    try:
-        next(dataset_iter)
-    except StopIteration:
-        break
 
 
 def batched(it, n):
@@ -141,12 +114,36 @@ def flush_chunk():
     eng_buf.clear()
     san_buf.clear()
 
+# ─────────────────────── vLLM initialisation ───────────────────── #
+print(f"[{dt.datetime.now():%F %T}] → Loading Gemma …")
+llm = LLM(
+    model=args.model,
+    tensor_parallel_size=args.tp,
+    pipeline_parallel_size=1,
+    dtype="bfloat16",
+    max_model_len=4096,
+    enable_chunked_prefill=True,
+    gpu_memory_utilization=0.90,
+    trust_remote_code=True,
+)
+
+prompt_tmpl = (
+    "Translate the following English text to Sanskrit. Return only one Devanagari Sanskrit translation wrapped in triple backticks. Do NOT return any English.\n\n"
+    "English:\n```\n{passage}\n```\n\nSanskrit:"
+)
+
+sampling = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=1024, n=1, truncate_prompt_tokens=2048)
 
 # ───────────────────────── main loop ───────────────────────────── #
 seen = existing_rows
 for i, batch in enumerate(batched(dataset_iter, args.batch_size)):
     prompts = [prompt_tmpl.format(passage=ex["text"]) for ex in batch]
-    outs = llm.generate(prompts, sampling)
+    try:
+        outs = llm.generate(prompts, sampling)
+    except ValueError as e:
+        if "4096" in str(e):
+            print(f"Error: {str(e)}")
+            continue
 
     for ex, out in zip(batch, outs):
         ids_buf.append(seen)
