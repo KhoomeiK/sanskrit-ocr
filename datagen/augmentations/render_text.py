@@ -46,11 +46,11 @@ DEFAULT_PARAMS = {
 
 def _create_background(width, height, style, params):
     # Check if image directory is provided and use image background if available
-    if params.image_dir and os.path.exists(params.image_dir):
-        image_files = [f for f in os.listdir(params.image_dir) 
+    if params['image_dir'] and os.path.exists(params['image_dir']):
+        image_files = [f for f in os.listdir(params['image_dir']) 
                       if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         if image_files:
-            img_path = os.path.join(params.image_dir, random.choice(image_files))
+            img_path = os.path.join(params['image_dir'], random.choice(image_files))
             try:
                 bg_img = Image.open(img_path).convert('RGB')
                 # Resize the image to match required dimensions
@@ -368,7 +368,6 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
     transforms.append(("blur", lambda img: blur_image(img, 
                                             random.uniform(params["blur_min"], params["blur_max"]))))
     
-
     # Add new page warping transformations
     transforms.append(("washboard", lambda img: washboard_warp(
         img,
