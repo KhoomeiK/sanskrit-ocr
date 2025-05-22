@@ -15,7 +15,7 @@ DEFAULT_PARAMS = {
     'base_images': 1,
     
     # Font options
-    'font_dir': 'datagen/fonts',
+    'font_dir': '/home/ubuntu/sanskrit-ocr/datagen/fonts',
     'font': 'Sharad76-Regular.otf',
     
     # Generation-level augmentations
@@ -46,7 +46,7 @@ DEFAULT_PARAMS = {
 
 def _create_background(width, height, style, params):
     # Check if image directory is provided and use image background if available
-    if params['image_dir'] and os.path.exists(params['image_dir']):
+    if 'image_dir' in params and os.path.exists(params['image_dir']):
         image_files = [f for f in os.listdir(params['image_dir']) 
                       if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
         if image_files:
