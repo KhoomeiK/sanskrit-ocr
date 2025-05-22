@@ -7,6 +7,43 @@ import math
 import argparse
 from math import pi
 
+# Global default parameters
+DEFAULT_PARAMS = {
+    # Basic options
+    'width': 400,
+    'height': 320,
+    'base_images': 1,
+    
+    # Font options
+    'font_dir': 'datagen/fonts',
+    'font': 'Sharad76-Regular.otf',
+    
+    # Generation-level augmentations
+    'noise': 0.7,
+    'aging': 0.6,
+    'texture': 0.7,
+    'stains': 0.6,
+    'stain_intensity': 0.5,
+    
+    # Word-level options
+    'word_position': 0.6,
+    'ink_color': 0.5,
+    'line_spacing': 0.4,
+    'baseline': 0.3,
+    'word_angle': 0.0,
+    
+    # Post-processing options
+    'apply_transforms': True,
+    'all_transforms': False,
+    'rotation_max': 5.0,
+    'brightness_var': 0.2,
+    'contrast_var': 0.2,
+    'noise_min': 0.01,
+    'noise_max': 0.05,
+    'blur_min': 0.5,
+    'blur_max': 1.0
+}
+
 def _create_background(width, height, style, params):
     # Check if image directory is provided and use image background if available
     if params.image_dir and os.path.exists(params.image_dir):
@@ -29,24 +66,24 @@ def _create_background(width, height, style, params):
         line_spacing = random.randint(15, 25)
         for y in range(0, height, line_spacing):
             line_width = random.randint(1, 2)
-            darkness = random.randint(6, 20) * params.texture
+            darkness = random.randint(6, 20) * params["texture"]
             background[y:y+line_width, :, :] = np.clip(background[y:y+line_width, :, :] - darkness, 0, 255)
             
-        noise = np.random.randint(0, int(15 * params.noise), (height, width, 3), dtype=np.uint8)
+        noise = np.random.randint(0, int(15 * params["noise"]), (height, width, 3), dtype=np.uint8)
         background = np.clip(background - noise, 0, 255).astype(np.uint8)
         
-        stain_count = int(random.randint(2, 4) * params.stains)
+        stain_count = int(random.randint(2, 4) * params["stains"])
         for _ in range(stain_count):
             x = random.randint(0, width-100)
             y = random.randint(0, height-100)
             size = random.randint(20, 60)
-            darkness = random.randint(8, 25) * params.stain_intensity
+            darkness = random.randint(8, 25) * params["stain_intensity"]
             shape = np.ones((size, size, 3), dtype=np.uint8) * darkness
             for i in range(size):
                 for j in range(size):
                     dist = ((i - size/2)**2 + (j - size/2)**2) / (size/4)**2
                     if dist < 1:
-                        alpha = (1 - dist) * random.uniform(0.4, 0.8) * params.stain_intensity
+                        alpha = (1 - dist) * random.uniform(0.4, 0.8) * params["stain_intensity"]
                         if y+i < height and x+j < width:
                             background[y+i, x+j, :] = np.clip(
                                 background[y+i, x+j, :] - shape[i, j, :] * alpha, 0, 255
@@ -55,12 +92,12 @@ def _create_background(width, height, style, params):
     elif style == "old_paper":
         background = np.ones((height, width, 3), dtype=np.uint8) * [236, 222, 181]
         
-        noise = np.random.randint(0, int(12 * params.noise), (height, width, 3), dtype=np.uint8)
+        noise = np.random.randint(0, int(12 * params["noise"]), (height, width, 3), dtype=np.uint8)
         background = np.clip(background - noise, 0, 255).astype(np.uint8)
         
         edge_width = width // 10
         for i in range(edge_width):
-            factor = (edge_width - i) / edge_width * 15 * params.aging
+            factor = (edge_width - i) / edge_width * 15 * params["aging"]
             background[i, :, 2] = np.clip(background[i, :, 2] - factor, 0, 255)
             background[height-i-1, :, 2] = np.clip(background[height-i-1, :, 2] - factor, 0, 255)
             background[:, i, 2] = np.clip(background[:, i, 2] - factor, 0, 255)
@@ -69,15 +106,15 @@ def _create_background(width, height, style, params):
     elif style == "birch":
         background = np.ones((height, width, 3), dtype=np.uint8) * [235, 225, 215]
         
-        noise = np.random.randint(0, int(10 * params.noise), (height, width, 3), dtype=np.uint8)
+        noise = np.random.randint(0, int(10 * params["noise"]), (height, width, 3), dtype=np.uint8)
         background = np.clip(background - noise, 0, 255).astype(np.uint8)
         
-        variation_count = int(150 * params.texture)
+        variation_count = int(150 * params["texture"])
         for _ in range(variation_count):
             x = random.randint(0, width-1)
             y = random.randint(0, height-1)
             size = random.randint(10, 25)
-            variation = random.randint(-6, 6) * params.texture
+            variation = random.randint(-6, 6) * params["texture"]
             
             for i in range(-size, size):
                 for j in range(-size, size):
@@ -90,12 +127,12 @@ def _create_background(width, height, style, params):
     else:  # "parchment"
         background = np.ones((height, width, 3), dtype=np.uint8) * [230, 215, 185]
         
-        variation_count = int(400 * params.texture)
+        variation_count = int(400 * params["texture"])
         for _ in range(variation_count):
             x = random.randint(0, width-1)
             y = random.randint(0, height-1)
             size = random.randint(5, 12)
-            variation = random.randint(-7, 7) * params.texture
+            variation = random.randint(-7, 7) * params["texture"]
             
             for i in range(-size, size):
                 for j in range(-size, size):
@@ -105,7 +142,7 @@ def _create_background(width, height, style, params):
                                 background[y+i, x+j, :] + variation, 0, 255
                             )
         
-        noise = np.random.randint(0, int(8 * params.noise), (height, width, 3), dtype=np.uint8)
+        noise = np.random.randint(0, int(8 * params["noise"]), (height, width, 3), dtype=np.uint8)
         background = np.clip(background - noise, 0, 255).astype(np.uint8)
     
     return Image.fromarray(background)
@@ -158,7 +195,7 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
             line_width = draw.textlength(line_text, font=font)
             x_position = (width - line_width) // 2
             
-            baseline_offset = random.randint(-2, 2) * params.baseline
+            baseline_offset = random.randint(-2, 2) * params["baseline"]
             y_line_position = y_position + baseline_offset
             
             # Check if we've reached the bottom of the image
@@ -168,10 +205,10 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
             # Render each word in the line
             x_word_position = x_position
             for word in line:
-                word_x_offset = int(random.uniform(-1.5, 1.5) * params.word_position)
-                word_y_offset = int(random.uniform(-1, 1) * params.word_position)
+                word_x_offset = int(random.uniform(-1.5, 1.5) * params["word_position"])
+                word_y_offset = int(random.uniform(-1, 1) * params["word_position"])
                 
-                color_variation = int(random.randint(-3, 3) * params.ink_color)
+                color_variation = int(random.randint(-3, 3) * params["ink_color"])
                 word_color = (
                     np.clip(ink_color[0] + color_variation, 0, 255),
                     np.clip(ink_color[1] + color_variation, 0, 255),
@@ -181,9 +218,9 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
                 word_width = draw.textlength(word, font=font)
                 word_height = font_size * 1.2
                 
-                if params.word_angle > 0:
+                if params["word_angle"] > 0:
                     # Apply rotation to individual word
-                    word_angle = random.uniform(-2, 2) * params.word_angle
+                    word_angle = random.uniform(-2, 2) * params["word_angle"]
                     
                     diagonal = math.sqrt(word_width**2 + word_height**2)
                     padding = int(diagonal * 0.5)
@@ -213,11 +250,12 @@ def _render_sanskrit(text, font_path, output_path, width, height, font_size, sty
                 x_word_position += word_width + space_width
             
             # Move to next line
-            line_spacing_factor = 1.0 + (random.uniform(-0.1, 0.1) * params.line_spacing)
+            line_spacing_factor = 1.0 + (random.uniform(-0.1, 0.1) * params["line_spacing"])
             y_position += int(font_size * 1.2 * line_spacing_factor)
         
-        img.save(output_path)
-        print(f"Saved rendered Sanskrit to {output_path}")
+        if output_path is not None:
+            img.save(output_path)
+            print(f"Saved rendered Sanskrit to {output_path}")
         return img
         
     except Exception as e:
@@ -320,16 +358,17 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
         return img.filter(ImageFilter.GaussianBlur(radius=radius))
     
     transforms.append(("rotate", lambda img: rotate_image(img, 
-                                            random.uniform(-params.rotation_max, params.rotation_max))))
+                                            random.uniform(-params["rotation_max"], params["rotation_max"]))))
     transforms.append(("brightness", lambda img: adjust_brightness(img, 
-                                            random.uniform(1.0-params.brightness_var, 1.0+params.brightness_var))))
+                                            random.uniform(1.0-params["brightness_var"], 1.0+params["brightness_var"]))))
     transforms.append(("contrast", lambda img: adjust_contrast(img, 
-                                            random.uniform(1.0-params.contrast_var, 1.0+params.contrast_var))))
+                                            random.uniform(1.0-params["contrast_var"], 1.0+params["contrast_var"]))))
     transforms.append(("noise", lambda img: add_noise(img, 
-                                            random.uniform(params.noise_min, params.noise_max))))
+                                            random.uniform(params["noise_min"], params["noise_max"]))))
     transforms.append(("blur", lambda img: blur_image(img, 
-                                            random.uniform(params.blur_min, params.blur_max))))
+                                            random.uniform(params["blur_min"], params["blur_max"]))))
     
+
     # Add new page warping transformations
     transforms.append(("washboard", lambda img: washboard_warp(
         img,
@@ -344,7 +383,7 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
         strength=random.uniform(0.4, 0.8) * random.choice([1, -1]),
         warp_portion=random.uniform(0.35, 0.5))))
     
-    if params.all_transforms:
+    if params["all_transforms"]:
         selected_transforms = transforms
     else:
         n_transforms = random.randint(1, min(3, len(transforms)))
@@ -371,10 +410,21 @@ def _apply_postprocessing(original_image, output_dir, base_filename, params):
     
     return all_images
 
-def _generate_sanskrit_samples(text, font_path, output_dir, params):
+def generate_sanskrit_samples(text, font_path=None, output_dir=None, params=None):
+    # Use default params if none provided, updating with any provided values
+    if params is None:
+        params = DEFAULT_PARAMS.copy()
+    else:
+        # Create a copy of default params and update with provided values
+        params = {**DEFAULT_PARAMS, **params}
+    
+    # Set default font path if not provided
+    if font_path is None:
+        font_path = os.path.join(params['font_dir'], params['font'])
+    
     if not os.path.exists(font_path):
         print(f"Error: Font not found at {font_path}")
-        return
+        return [] if output_dir is None else None
     
     styles = ["lined_paper", "old_paper", "birch", "parchment"]
     
@@ -385,11 +435,12 @@ def _generate_sanskrit_samples(text, font_path, output_dir, params):
         "parchment": (10, 10, 10)
     }
     
-    width, height = params.width, params.height
-    os.makedirs(output_dir, exist_ok=True)
+    width, height = params['width'], params['height']
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     
     # Randomly sample styles for the total number of base images
-    sampled_styles = random.choices(styles, k=params.base_images)
+    sampled_styles = random.choices(styles, k=params['base_images'])
     style_counts = {style: sampled_styles.count(style) for style in styles}
     print(f"Randomly selected styles: {style_counts}")
     
@@ -400,11 +451,13 @@ def _generate_sanskrit_samples(text, font_path, output_dir, params):
     for style, count in style_counts.items():
         for i in range(count):
             image_counter += 1
-            output_path = os.path.join(output_dir, f"sanskrit_{style}_{i+1}.png")
             
             # Randomly select a font size between 12 and 18
             font_size = random.randint(12, 18)
             print(f"Using font size {font_size} for {style}_{i+1}")
+            
+            # If output_dir is provided, save to file, otherwise just render
+            output_path = os.path.join(output_dir, f"sanskrit_{style}_{i+1}.png") if output_dir else None
             
             img = _render_sanskrit(
                 text=text,
@@ -421,9 +474,12 @@ def _generate_sanskrit_samples(text, font_path, output_dir, params):
             if img:
                 base_images.append(img)
                 
-                if params.apply_transforms:
+                if params['apply_transforms'] and output_dir:
                     base_filename = f"sanskrit_{style}_{i+1}"
-                    _apply_postprocessing(img, output_dir, base_filename, params)
+                    transformed_images = _apply_postprocessing(img, output_dir, base_filename, params)
+                    base_images.extend(transformed_images)
+    
+    return base_images if output_dir is None else None
 
 def main():
     sanskrit_text = """ज्ञानं परमं ध्येयम्। ज्ञानात् सत्यं प्रकाशते। सत्येन मुक्तिः प्राप्यते। मुक्तिः परमं सुखम्। तस्मात् ज्ञानं समभ्यसेत्। विद्या ददाति विनयम्। विनयात् याति पात्रताम्। पात्रत्वात् धनमाप्नोति। धनात् धर्मं ततः सुखम्॥"""
@@ -434,82 +490,95 @@ def main():
     basic = parser.add_argument_group('Basic Options')
     basic.add_argument('--output-dir', type=str, default='data/synthetic/images',
                       help='Output directory for generated images')
-    basic.add_argument('--width', type=int, default=400,
+    basic.add_argument('--width', type=int, default=DEFAULT_PARAMS['width'],
                       help='Width of output images')
-    basic.add_argument('--height', type=int, default=320, 
+    basic.add_argument('--height', type=int, default=DEFAULT_PARAMS['height'], 
                       help='Height of output images')
-    basic.add_argument('--base-images', type=int, default=5,
+    basic.add_argument('--base-images', type=int, default=DEFAULT_PARAMS['base_images'],
                       help='Total number of base images to generate (randomly sampled styles)')
     
     # Font options
     font = parser.add_argument_group('Font Options')
-    font.add_argument('--font-dir', type=str, default='datagen/fonts',
+    font.add_argument('--font-dir', type=str, default=DEFAULT_PARAMS['font_dir'],
                     help='Directory containing font files')
-    font.add_argument('--font', type=str, default='Sharad76-Regular.otf',
+    font.add_argument('--font', type=str, default=DEFAULT_PARAMS['font'],
                     help='Font filename within the font directory')
     
-    # Generation-level augmentations (background + word)
-    gen = parser.add_argument_group('Generation-Level Augmentations', 
-                                  'Controls for background and word-level effects')
-    # Background options
-    gen.add_argument('--noise', type=float, default=0.7,
+    # Generation-level augmentations
+    gen = parser.add_argument_group('Generation-Level Augmentations')
+    gen.add_argument('--noise', type=float, default=DEFAULT_PARAMS['noise'],
                    help='Background noise intensity (0.0-1.0)')
-    gen.add_argument('--aging', type=float, default=0.6,
+    gen.add_argument('--aging', type=float, default=DEFAULT_PARAMS['aging'],
                    help='Edge aging effect (0.0-1.0)')
-    gen.add_argument('--texture', type=float, default=0.7,
+    gen.add_argument('--texture', type=float, default=DEFAULT_PARAMS['texture'],
                    help='Texture variation (0.0-1.0)')
-    gen.add_argument('--stains', type=float, default=0.6,
+    gen.add_argument('--stains', type=float, default=DEFAULT_PARAMS['stains'],
                    help='Number of stains (0.0-1.0)')
-    gen.add_argument('--stain-intensity', type=float, default=0.5,
+    gen.add_argument('--stain-intensity', type=float, default=DEFAULT_PARAMS['stain_intensity'],
                    help='Intensity of stain effects (0.0-1.0)')
     gen.add_argument('--image-dir', type=str, default='',
                     help='Directory to randomly sample background image from. If left empty, no image backgrounds will be used.')
     
     # Word-level options
-    gen.add_argument('--word-position', type=float, default=0.6,
+    gen.add_argument('--word-position', type=float, default=DEFAULT_PARAMS['word_position'],
                    help='Random word position variation (0.0-1.0)')
-    gen.add_argument('--ink-color', type=float, default=0.5,
+    gen.add_argument('--ink-color', type=float, default=DEFAULT_PARAMS['ink_color'],
                    help='Ink color variation (0.0-1.0)')
-    gen.add_argument('--line-spacing', type=float, default=0.4,
+    gen.add_argument('--line-spacing', type=float, default=DEFAULT_PARAMS['line_spacing'],
                    help='Random line spacing (0.0-1.0)')
-    gen.add_argument('--baseline', type=float, default=0.3,
+    gen.add_argument('--baseline', type=float, default=DEFAULT_PARAMS['baseline'],
                    help='Baseline wobble effect (0.0-1.0)')
-    gen.add_argument('--word-angle', type=float, default=0.0,
+    gen.add_argument('--word-angle', type=float, default=DEFAULT_PARAMS['word_angle'],
                    help='Random word angle (0.0-1.0)')
     
-    # Post-processing options (image transforms)
-    post = parser.add_argument_group('Post-Processing Augmentations', 
-                                   'Controls for image transformations after rendering')
+    # Post-processing options
+    post = parser.add_argument_group('Post-Processing Augmentations')
     post.add_argument('--no-transforms', dest='apply_transforms', action='store_false',
                     help='Disable post-processing transforms')
     post.add_argument('--all-transforms', action='store_true',
                     help='Apply all transforms instead of random subset')
-    post.add_argument('--rotation-max', type=float, default=5.0,
+    post.add_argument('--rotation-max', type=float, default=DEFAULT_PARAMS['rotation_max'],
                     help='Maximum rotation angle in degrees')
-    post.add_argument('--brightness-var', type=float, default=0.2,
+    post.add_argument('--brightness-var', type=float, default=DEFAULT_PARAMS['brightness_var'],
                     help='Brightness variation factor (0.0-1.0)')
-    post.add_argument('--contrast-var', type=float, default=0.2,
+    post.add_argument('--contrast-var', type=float, default=DEFAULT_PARAMS['contrast_var'],
                     help='Contrast variation factor (0.0-1.0)')
-    post.add_argument('--noise-min', type=float, default=0.01,
+    post.add_argument('--noise-min', type=float, default=DEFAULT_PARAMS['noise_min'],
                     help='Minimum noise intensity for transforms')
-    post.add_argument('--noise-max', type=float, default=0.05,
+    post.add_argument('--noise-max', type=float, default=DEFAULT_PARAMS['noise_max'],
                     help='Maximum noise intensity for transforms')
-    post.add_argument('--blur-min', type=float, default=0.5,
+    post.add_argument('--blur-min', type=float, default=DEFAULT_PARAMS['blur_min'],
                     help='Minimum blur radius')
-    post.add_argument('--blur-max', type=float, default=1.0,
+    post.add_argument('--blur-max', type=float, default=DEFAULT_PARAMS['blur_max'],
                     help='Maximum blur radius')
     
-    parser.set_defaults(apply_transforms=True, all_transforms=False)
-    params = parser.parse_args()
+    parser.set_defaults(apply_transforms=DEFAULT_PARAMS['apply_transforms'], 
+                       all_transforms=DEFAULT_PARAMS['all_transforms'])
+    args = parser.parse_args()
     
-    font_path = os.path.join(params.font_dir, params.font)
+    # Convert args to dict, excluding output_dir
+    params = {k: v for k, v in vars(args).items() if k != 'output_dir'}
     
-    _generate_sanskrit_samples(
+    generate_sanskrit_samples(
         text=sanskrit_text,
-        font_path=font_path,
-        output_dir=params.output_dir,
+        font_path=os.path.join(params['font_dir'], params['font']),
+        output_dir=args.output_dir,
         params=params
     )
 
 if __name__ == "__main__":
     main()
+
+    # with open('/Users/rohan/Desktop/indic_merged.txt', 'r') as text:
+    #     lines = []
+    #     for i in range(10):
+    #         line = text.readline()[:-1]
+    #         lines.append(line)
+
+    #     text = ' ।\n'.join(lines) + '।।'
+    #     print(text)
+    #     images = generate_sanskrit_samples(text)
+    #     print(len(images))
+    #     images[0].show()
+
+    #     import time; time.sleep(20)
