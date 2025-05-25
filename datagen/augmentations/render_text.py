@@ -24,6 +24,8 @@ DEFAULT_PARAMS = {
     'texture': 0.7,
     'stains': 0.6,
     'stain_intensity': 0.5,
+    'ink_stains': 1, # change as needed
+    'ink_stain_intensity': 1, # change as needed
     
     # Word-level options
     'word_position': 0.6,
@@ -88,6 +90,37 @@ def _create_background(width, height, style, params):
                             background[y+i, x+j, :] = np.clip(
                                 background[y+i, x+j, :] - shape[i, j, :] * alpha, 0, 255
                             )
+    
+    if style == "inkstained": # Change to whatever required
+        background = np.ones((height, width, 3), dtype=np.uint8) * [210, 180, 140]
+        noise = np.random.randint(0, int(15 * params["noise"]), (height, width, 3), dtype=np.uint8)
+        background = np.clip(background - noise, 0, 255).astype(np.uint8)
+        
+        ink_stain_count = int(random.randint(50, 54) * params["ink_stains"]) # change these as needed
+        for _ in range(ink_stain_count):
+            x = random.randint(0, width-100)
+            y = random.randint(0, height-100)
+            size = random.randint(5, 50)
+            darkness = random.randint(5, 200) * params["ink_stain_intensity"] # change these as needed
+            shape = np.ones((4*size, 2*size, 3), dtype=np.uint8) * darkness
+            blob_seed = random.uniform(0,2*pi)
+            blob_length = random.uniform(0.7,1.7)
+            for i in range(int(4*(1/blob_length)*size)):
+                for j in range(2*size):
+                    dist = ((blob_length*(j - size/2)-blob_seed)**2 + ((i - size)-math.sin(blob_seed))**2) # based off of (length*x-blob_seed)^2 + (y-sin(x))^2 = size
+                    if dist <= 0.80 * size:
+                        alpha = (0.80 * size - dist) * random.uniform(0.5, 1) * params["ink_stain_intensity"]
+                        if y+i < height and x+j < width:
+                            background[y+i, x+j, :] = np.clip(
+                                background[y+i, x+j, :] - (shape[i, j, :] * alpha), 0, 255
+                            )
+                    elif random.randint(0,2) == 2 and dist <= size: # for rough edges
+                        if y+i < height and x+j < width:
+                            alpha = random.uniform(0.2, 0.7) * params["ink_stain_intensity"]
+                            background[y+i, x+j, :] = np.clip(
+                                background[y+i, x+j, :] - shape[i, j, :] * alpha, 0, 255
+                            )
+    
     
     elif style == "old_paper":
         background = np.ones((height, width, 3), dtype=np.uint8) * [236, 222, 181]
