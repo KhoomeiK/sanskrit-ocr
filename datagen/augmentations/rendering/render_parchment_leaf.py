@@ -1,11 +1,17 @@
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
 import argparse, random, pathlib, cv2, string
 from PIL import Image
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pdf2image import convert_from_path
 from weasyprint import HTML
-import degradations as dg
+from augmentations import degradations as dg
 
-TEXT = pathlib.Path("sample_sa.txt").read_text("utf-8").strip()
+BASE_DIR = Path(__file__).parent.parent.parent
+TEXT_FILE = BASE_DIR / "sample_sa.txt"
+TEXT = TEXT_FILE.read_text("utf-8").strip() if TEXT_FILE.exists() else ""
 OUT = pathlib.Path("output_parchment"); OUT.mkdir(exist_ok=True)
 DPI = 300
 NO_DEG = 0.10
@@ -15,7 +21,9 @@ INKS = ["#100d05", "#23140a"]
 DEV = "०१२३४५६७८९"
 def _sa(n): return "".join(DEV[int(d)] for d in str(n))
 
-def _env(): return Environment(loader=FileSystemLoader("templates"), autoescape=select_autoescape(["html", "xml"]))
+def _env(): 
+    templates_dir = BASE_DIR / "augmentations" / "templates"
+    return Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=select_autoescape(["html", "xml"]))
 
 def _morphology():
     op = random.choices(["open", "close", "dilate", "erode"], weights=[1, 1, 1, 2])[0]
@@ -32,8 +40,9 @@ EFFECTS = {
     "morphology": (0.75, _morphology),
 }
 
-def _font(dir_="../fonts"):
-    d = list(pathlib.Path(dir_).glob("*.otf")) + list(pathlib.Path(dir_).glob("*.ttf"))
+def _font():
+    fonts_dir = BASE_DIR / "fonts"
+    d = list(fonts_dir.glob("*.otf")) + list(fonts_dir.glob("*.ttf"))
     return str(random.choice(d).resolve())
 
 def _chain():
@@ -74,7 +83,7 @@ def render(text: str, use_max=False):
         line_h = random.uniform(1.0, random.uniform(1.25, 1.4))
         para_spacing = random.uniform(0.5, 2.0)
         para_scale = random.uniform(1.1, 1.4)
-        font_size = random.uniform(5, 8)
+        font_size = random.uniform(6, 8)
 
     ctx = {
         "font_path": _font(),
@@ -101,13 +110,12 @@ def render(text: str, use_max=False):
     }
 
     pdf = OUT / "tmp.pdf"
-    HTML(string=env.get_template("parchment_leaf.html.jinja").render(**ctx), base_url="templates").write_pdf(str(pdf))
+    HTML(string=env.get_template("parchment_leaf.html.jinja").render(**ctx), base_url=str(BASE_DIR / "augmentations" / "templates")).write_pdf(str(pdf))
     img_path = OUT / "tmp_00.png"
     convert_from_path(str(pdf), dpi=DPI, first_page=1, last_page=1)[0].save(img_path, "PNG")
     pdf.unlink()
     img = _degrade(img_path)
     img_path.unlink()
-
 
     lines = []
     if ctx["show_page_no"]: lines.append(ctx["page_no_sa"])

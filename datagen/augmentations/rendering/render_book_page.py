@@ -1,11 +1,17 @@
-import degradations as dg
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+from augmentations import degradations as dg
 import argparse, cv2, pathlib, random, string
 from PIL import Image
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pdf2image import convert_from_path
 from weasyprint import HTML
 
-TEXT = open("sample_sa.txt", encoding="utf-8").read().strip()
+BASE_DIR = Path(__file__).parent.parent.parent
+TEXT_FILE = BASE_DIR / "sample_sa.txt"
+TEXT = TEXT_FILE.read_text(encoding="utf-8").strip() if TEXT_FILE.exists() else ""
 OUT = pathlib.Path("output"); OUT.mkdir(exist_ok=True)
 NO_DEGRADE = 0.1
 DPI = 300
@@ -13,7 +19,6 @@ DPI = 300
 LAYOUTS = ["vanilla", "columns", "footnote", "subheading"]
 WEIGHTS = [0.25, 0.25, 0.25, 0.25]
 
-# define s=2 here for lambda below
 s = 2
 
 EFFECTS = {
@@ -41,15 +46,18 @@ def _rand_phrase(t, a=1, b=3, m=3):
 
 def _rand_footnotes(t): return [_rand_phrase(t, 4, 8) for _ in range(random.randint(1, 3))]
 
-def _font(dir_="../fonts"): return random.choice(list(pathlib.Path(dir_).glob("*.?tf"))).resolve()
+def _font(): 
+    fonts_dir = BASE_DIR / "fonts"
+    return random.choice(list(fonts_dir.glob("*.?tf"))).resolve()
 
-def _env(): return Environment(loader=FileSystemLoader("templates"), autoescape=select_autoescape(["html", "xml"]))
+def _env(): 
+    templates_dir = BASE_DIR / "augmentations" / "templates"
+    return Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=select_autoescape(["html", "xml"]))
 
 def _build_html(env, ctx):
     html = env.get_template("book_page.html.jinja").render(**ctx)
     reset = f'<style>@page{{counter-reset: page {ctx["page_start"]};}}</style>'
     return html.replace("</head>", reset + "</head>")
-
 
 def _chain():
     ch = []
@@ -72,7 +80,6 @@ def render(text: str, use_max=False):
     paras = [p.strip() for p in text.split("\n\n") if p.strip()]
     mode = random.choices(LAYOUTS, weights=WEIGHTS, k=1)[0]
 
-    # Max values for sizing params
     if use_max:
         column_gap = 10
         column_rule_width = 0.6
@@ -123,7 +130,7 @@ def render(text: str, use_max=False):
         subhead_margin=subhead_margin,
     )
     pdf = OUT / "tmp.pdf"
-    HTML(string=_build_html(env, ctx), base_url="templates").write_pdf(str(pdf))
+    HTML(string=_build_html(env, ctx), base_url=str(BASE_DIR / "augmentations" / "templates")).write_pdf(str(pdf))
     img_path = OUT / "tmp_00.png"
     convert_from_path(str(pdf), dpi=DPI, first_page=1, last_page=1)[0].save(img_path, "PNG")
     pdf.unlink()
@@ -159,3 +166,4 @@ if __name__ == "__main__":
     ap.add_argument("--max", action="store_true", help="Use max sizing parameters")
     args = ap.parse_args()
     _main(args.n, args.max)
+
