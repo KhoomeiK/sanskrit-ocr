@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 from typing import Iterator, List, Tuple
 from PIL import Image
+from augmentations.postprocess import apply_effects
 
 
 class RenderingManager:
@@ -16,17 +17,15 @@ class RenderingManager:
         """Dynamically load all render_*.py files from the rendering folder."""
         rendering_dir = Path(__file__).parent / "rendering"
         
-        # Find all render_*.py files
+        # find all render_*.py files
         for render_file in rendering_dir.glob("render_*.py"):
             module_name = render_file.stem
             
-            # Load the module dynamically
             spec = importlib.util.spec_from_file_location(module_name, render_file)
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
             
-            # Check if module has a render function
             if hasattr(module, 'render'):
                 self.renderers[module_name] = module.render
                 print(f"Loaded renderer: {module_name}")
@@ -42,11 +41,26 @@ class RenderingManager:
     def render_random(self, text: str, use_max: bool = False) -> Tuple[Image.Image, str]:
         """Render text using a randomly selected renderer."""
         renderer = self.get_random_renderer()
-        return renderer(text, use_max=use_max)
+        img, caption = renderer(text, use_max=use_max)
+        
+        # post-processing effects
+        img = apply_effects(img)
+        
+        return img, caption
 
 
-def chunk_text(lines_iter: Iterator[str], min_chars: int = 500, max_chars: int = 625) -> Iterator[str]:
-    """Chunk lines from iterator into strings of specified character length."""
+def chunk_text(lines_iter: Iterator[str], min_chars: int = 550, max_chars: int = 650) -> Iterator[str]:
+    """
+    Chunk lines from iterator into strings of specified character length.
+    
+    Args:
+        lines_iter: Iterator yielding lines of text
+        min_chars: Minimum characters per chunk
+        max_chars: Maximum characters per chunk
+    
+    Yields:
+        Chunked text strings
+    """
     current_chunk = []
     current_length = 0
     target_length = random.randint(min_chars, max_chars)
@@ -58,7 +72,7 @@ def chunk_text(lines_iter: Iterator[str], min_chars: int = 500, max_chars: int =
             
         line_length = len(line)
         
-        # If adding this line would exceed our target, yield current chunk
+        # if adding this line would exceed our target, yield current chunk
         if current_length + line_length > target_length and current_chunk:
             yield "\n\n".join(current_chunk)
             current_chunk = []
@@ -68,7 +82,7 @@ def chunk_text(lines_iter: Iterator[str], min_chars: int = 500, max_chars: int =
         current_chunk.append(line)
         current_length += line_length + 2  # +2 for the \n\n separator
     
-    # Don't forget the last chunk
+    # last chunk
     if current_chunk:
         yield "\n\n".join(current_chunk)
 
@@ -80,7 +94,7 @@ def generate_dataset(data: Iterator[str], num_samples: int = None, use_max: bool
     Args:
         data: Iterator yielding lines of text
         num_samples: Maximum number of samples to generate (None for all)
-        use_max: Whether to use maximum sizing parameters for rendering - for debugging
+        use_max: Whether to use maximum sizing parameters for rendering
         images_per_sample: Number of images to generate per text chunk
     
     Returns:
@@ -104,14 +118,14 @@ def generate_dataset(data: Iterator[str], num_samples: int = None, use_max: bool
                 print(f"Error rendering sample {i}-{j}: {e}")
                 continue
         
-        if (i + 1) % 100 == 0:
+        if (i + 1) % 10 == 0:
             print(f"Generated {i + 1} chunks ({(i + 1) * images_per_sample} images)...")
     
     return results
 
 
-# Convenience function for backwards compatibility
 def render_random(text: str, use_max: bool = False) -> Tuple[Image.Image, str]:
     """Render text using a randomly selected renderer."""
     manager = RenderingManager()
-    return manager.render_random(text, use_max)
+    img, caption = manager.render_random(text, use_max)
+    return img, caption

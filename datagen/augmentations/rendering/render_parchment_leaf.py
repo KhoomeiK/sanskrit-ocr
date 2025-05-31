@@ -35,8 +35,8 @@ def _morphology():
 EFFECTS = {
     "blur": (0.2, lambda: dict(radius=random.choice([3, 5]))),
     "bleed_through": (0.15, lambda: dict(alpha=random.uniform(0.7, 0.9), offset_y=random.randint(-8, 8))),
-    "salt": (0.2, lambda: dict(amount=random.uniform(0.03, 0.06))),
-    "pepper": (0.2, lambda: dict(amount=0.03)),
+    "salt": (0.2, lambda: dict(amount=random.uniform(0.01, 0.03))),
+    "pepper": (0.2, lambda: dict(amount=random.uniform(0.01, 0.03))),
     "morphology": (0.75, _morphology),
 }
 
