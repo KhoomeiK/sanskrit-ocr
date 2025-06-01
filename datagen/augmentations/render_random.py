@@ -52,7 +52,7 @@ class RenderingManager:
         return img, caption
 
 
-def chunk_text(lines_iter: Iterator[str], min_chars: int = 1100, max_chars: int = 1400) -> Iterator[str]:
+def chunk_text(lines_iter: Iterator[str], min_chars: int = 1050, max_chars: int = 1350) -> Iterator[str]:
     """
     Chunk lines from iterator into strings of specified character length.
     

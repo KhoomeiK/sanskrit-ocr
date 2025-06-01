@@ -123,7 +123,7 @@ EFFECTS: Dict[str, Tuple[Callable[..., Image.Image], float, Callable[[], Dict]]]
     "bad_photocopy": (bad_photocopy, 0.05, lambda: {}),
     "lighting_gradient": (lighting_gradient, 0.025, lambda: {}),
     "page_border": (page_border, 0.025, lambda: {}),
-    "folding": (folding, 0.05, lambda: {}),
+    "folding": (folding, 0.075, lambda: {}),
     "shadow_cast": (shadow_cast, 0.0125, lambda: {}),
     "voronoi_tessellation": (voronoi_tessellation, 0.1, lambda: {}),
     # "reflected_light": (reflected_light, 0.0125, lambda: {}),
