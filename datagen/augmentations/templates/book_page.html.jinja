@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="sa">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face{
+  font-family:"SanskritFont";
+  src:url("{{ font_path }}") format("opentype");
+}
+
+@page{
+  size: {{ page_width }}mm {{ page_height }}mm;
+  margin: {{ margin_mm }}mm;
+
+  {% if page_number_pos == "top" %}
+    {% if page_side == "left" %}
+      @top-left   { content: counter(page, devanagari); font-family:"SanskritFont"; font-weight: {{ weight_pageno }}; }
+    {% else %}
+      @top-right  { content: counter(page, devanagari); font-family:"SanskritFont"; font-weight: {{ weight_pageno }}; }
+    {% endif %}
+  {% else %}
+      @bottom-center{ content: counter(page, devanagari); font-family:"SanskritFont"; font-weight: {{ weight_pageno }}; }
+  {% endif %}
+
+  @top-center{
+      content:"{{ chapter_title }}";
+      font-family:"SanskritFont";
+      font-size:{{ header_size }}pt;
+      font-weight:{{ weight_title }};
+  }
+
+  @footnote{
+      border-top: {{ footnote_rule }}pt solid;
+      padding-top: 2mm;
+  }
+}
+
+body{
+  margin:0;
+  font-family:"SanskritFont";
+  font-size:{{ font_size }}pt;
+  line-height:{{ line_height }};
+  text-align:justify;
+  -weasy-hyphens:auto;
+  font-weight:{{ weight_body }};
+}
+
+{% if mode == "columns" %}
+.content{ column-count:2; column-gap:{{ column_gap }}mm; column-rule:{{ column_rule_width }}pt solid; }
+{% else %}
+.content{}
+{% endif %}
+
+.subhead{
+  text-align:center;
+  font-size:{{ subhead_size }}pt;
+  margin:{{ subhead_margin }}pt 0;
+  font-weight:{{ weight_title }};
+}
+
+.fn{
+  font-size: {{ footnote_size }}pt;
+  text-align: justify;
+  display:block;
+}
+</style>
+</head>
+
+<body>
+<div class="content">
+{% for p in paragraphs %}
+    {% if mode == "subheading" and loop.index0 == subhead_at %}
+        <div class="subhead">{{ subheading }}</div>
+    {% endif %}
+    <p>{{ p }}</p>
+{% endfor %}
+
+{% if mode == "footnote" %}
+    <hr>
+    {% for f in footnotes %}
+        <span class="fn">{{ f }}</span>
+    {% endfor %}
+{% endif %}
+</div>
+</body>
+</html>
