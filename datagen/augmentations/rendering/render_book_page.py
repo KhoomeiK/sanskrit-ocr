@@ -44,7 +44,7 @@ def _rand_phrase(t, a=1, b=3, m=3):
     n = min(random.randint(a, b), len(w))
     return " ".join(random.sample(w, n)) if w else "अध्यायः"
 
-def _rand_footnotes(t): return [_rand_phrase(t, 4, 8) for _ in range(random.randint(1, 3))]
+def _rand_footnotes(t): return [_rand_phrase(t, 4, 8) for _ in range(random.randint(1, 2))]
 
 def _font(): 
     fonts_dir = BASE_DIR / "fonts"
@@ -80,6 +80,9 @@ def render(text: str, use_max=False):
     paras = [p.strip() for p in text.split("\n\n") if p.strip()]
     mode = random.choices(LAYOUTS, weights=WEIGHTS, k=1)[0]
 
+    # choose a font and decide base font_size
+    font_path = str(_font())
+
     if use_max:
         column_gap = 10
         column_rule_width = 0.6
@@ -103,8 +106,12 @@ def render(text: str, use_max=False):
         subhead_size = random.uniform(9, 11)
         subhead_margin = random.randint(6, 10)
 
+    # if the font filename contains "Sharad", force the smallest size (8)
+    if "Sharad" in Path(font_path).name:
+        font_size = 8
+
     ctx = dict(
-        font_path=str(_font()),
+        font_path=font_path,
         chapter_title=_rand_phrase(text, 2, 3),
         page_number_pos=random.choice(["top", "bottom"]),
         page_side=random.choice(["left", "right"]),
@@ -124,11 +131,13 @@ def render(text: str, use_max=False):
         weight_title=random.choice([500, 700]),
         weight_body=random.choice([300, 700]),
         weight_pageno=random.choice([400, 500]),
-        page_width=120, page_height=180,
+        page_width=180,
+        page_height=180,
         page_start=random.randint(1, 999),
         subhead_size=subhead_size,
         subhead_margin=subhead_margin,
     )
+
     pdf = OUT / "tmp.pdf"
     HTML(string=_build_html(env, ctx), base_url=str(BASE_DIR / "augmentations" / "templates")).write_pdf(str(pdf))
     img_path = OUT / "tmp_00.png"

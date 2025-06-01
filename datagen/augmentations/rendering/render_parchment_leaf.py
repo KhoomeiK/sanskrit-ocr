@@ -3,8 +3,10 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 import argparse, random, pathlib, cv2, string
+from augraphy.utilities.overlaybuilder import OverlayBuilder  # NEW
 from PIL import Image
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+import numpy as np
 from pdf2image import convert_from_path
 from weasyprint import HTML
 from augmentations import degradations as dg
@@ -14,7 +16,7 @@ TEXT_FILE = BASE_DIR / "sample_sa.txt"
 TEXT = TEXT_FILE.read_text("utf-8").strip() if TEXT_FILE.exists() else ""
 OUT = pathlib.Path("output_parchment"); OUT.mkdir(exist_ok=True)
 DPI = 300
-NO_DEG = 0.10
+NO_DEG = 0.1
 
 PARCHMENT = ["#f5deb3", "#f0d8ab", "#c3a374", "#a47a3c"]
 INKS = ["#100d05", "#23140a"]
@@ -36,7 +38,7 @@ EFFECTS = {
     "blur": (0.2, lambda: dict(radius=random.choice([3, 5]))),
     "bleed_through": (0.15, lambda: dict(alpha=random.uniform(0.7, 0.9), offset_y=random.randint(-8, 8))),
     "salt": (0.2, lambda: dict(amount=random.uniform(0.01, 0.03))),
-    "pepper": (0.2, lambda: dict(amount=random.uniform(0.01, 0.03))),
+    "pepper": (0.2, lambda: dict(amount=0.01)),
     "morphology": (0.75, _morphology),
 }
 
@@ -66,6 +68,9 @@ def render(text: str, use_max=False):
     raw = [p.strip() for p in text.split("\n\n") if p.strip()]
     paragraphs = [{"text": x, "large": random.random() < 0.25} for x in raw]
 
+    # choose a font and decide base font_size
+    font_path = _font()
+
     if use_max:
         margin = 15
         stripe = 0.8
@@ -74,7 +79,7 @@ def render(text: str, use_max=False):
         line_h = 1.4
         para_spacing = 2.0
         para_scale = 1.4
-        font_size = 8
+        font_size = 10
     else:
         margin = random.uniform(8, 15)
         stripe = random.uniform(0.5, 0.8)
@@ -83,14 +88,19 @@ def render(text: str, use_max=False):
         line_h = random.uniform(1.0, random.uniform(1.25, 1.4))
         para_spacing = random.uniform(0.5, 2.0)
         para_scale = random.uniform(1.1, 1.4)
-        font_size = random.uniform(6, 8)
+        # default random range
+        font_size = random.uniform(8, 10)
+
+    # if the font filename contains "Sharad", force smallest size = 7
+    if "Sharad" in Path(font_path).name:
+        font_size = 7
 
     ctx = {
-        "font_path": _font(),
+        "font_path": font_path,
         "parchment": random.choice(PARCHMENT),
         "ink": random.choice(INKS),
         "page_width": 180,
-        "page_height": 70,
+        "page_height": 180,
         "font_size": font_size,
         "line_height": line_h,
         "paragraphs": paragraphs,
@@ -116,6 +126,42 @@ def render(text: str, use_max=False):
     pdf.unlink()
     img = _degrade(img_path)
     img_path.unlink()
+
+    # --------------------------------------------------------------------------
+    # Paper‑texture blending 
+    # --------------------------------------------------------------------------
+    if random.random() < 0.8:  # 80 % chance to blend with paper texture
+        paper_textures_dir = BASE_DIR / "augmentations" / "paper_textures"
+        texture_files = list(paper_textures_dir.glob("*.png")) + \
+                        list(paper_textures_dir.glob("*.jpg"))
+
+        if texture_files:
+            texture = Image.open(random.choice(texture_files)).resize(
+                img.size, Image.Resampling.LANCZOS
+            )
+
+            fg = np.array(texture.convert("RGB"))
+            bg = np.array(img.convert("RGB"))
+
+            # choose a blend method similar to PaperFactory
+            blend_method = random.choice(
+                [
+                    "ink_to_paper", "min", "mix", "normal",
+                    "overlay", "darken", "multiply"
+                ]
+            )
+
+            ob = OverlayBuilder(
+                blend_method,   # method
+                fg,             # foreground  (texture)
+                bg,             # background  (rendered page)
+                1,              # opacity
+                (1, 1),         # offset      (tiny jitter to avoid seams)
+                "center",       # offset type
+                0,              # rotation
+            )
+            blended = ob.build_overlay()
+            img = Image.fromarray(blended.astype(np.uint8))
 
     lines = []
     if ctx["show_page_no"]: lines.append(ctx["page_no_sa"])

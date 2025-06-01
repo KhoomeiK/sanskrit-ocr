@@ -14,7 +14,7 @@ Make sure you `export HUGGING_FACE_HUB_TOKEN=...` to load gemma.
 
 You'll also need the following packages installed for synthetic data:
 
-`pip install weasyprint jinja2 tqdm pdf2image opencv-python imageio pydyf==0.10.0`
+`pip install weasyprint jinja2 tqdm pdf2image opencv-python imageio pydyf==0.10.0 augraphy`
 
 ## Rendering System Usage
 Each renderer can be used standalone within `datagen/` to generate samples:

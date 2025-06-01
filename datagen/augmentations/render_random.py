@@ -3,9 +3,10 @@ import sys
 import random
 import importlib.util
 from pathlib import Path
+from tqdm import tqdm
 from typing import Iterator, List, Tuple
 from PIL import Image
-from augmentations.postprocess import apply_effects
+from augmentations.effects import apply_effects
 
 
 class RenderingManager:
@@ -17,15 +18,17 @@ class RenderingManager:
         """Dynamically load all render_*.py files from the rendering folder."""
         rendering_dir = Path(__file__).parent / "rendering"
         
-        # find all render_*.py files
+        # Find all render_*.py files
         for render_file in rendering_dir.glob("render_*.py"):
             module_name = render_file.stem
             
+            # Load the module dynamically
             spec = importlib.util.spec_from_file_location(module_name, render_file)
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
             
+            # Check if module has a render function
             if hasattr(module, 'render'):
                 self.renderers[module_name] = module.render
                 print(f"Loaded renderer: {module_name}")
@@ -43,13 +46,13 @@ class RenderingManager:
         renderer = self.get_random_renderer()
         img, caption = renderer(text, use_max=use_max)
         
-        # post-processing effects
+        # Apply effects
         img = apply_effects(img)
         
         return img, caption
 
 
-def chunk_text(lines_iter: Iterator[str], min_chars: int = 550, max_chars: int = 650) -> Iterator[str]:
+def chunk_text(lines_iter: Iterator[str], min_chars: int = 1100, max_chars: int = 1400) -> Iterator[str]:
     """
     Chunk lines from iterator into strings of specified character length.
     
@@ -72,7 +75,7 @@ def chunk_text(lines_iter: Iterator[str], min_chars: int = 550, max_chars: int =
             
         line_length = len(line)
         
-        # if adding this line would exceed our target, yield current chunk
+        # If adding this line would exceed our target, yield current chunk
         if current_length + line_length > target_length and current_chunk:
             yield "\n\n".join(current_chunk)
             current_chunk = []
@@ -82,7 +85,7 @@ def chunk_text(lines_iter: Iterator[str], min_chars: int = 550, max_chars: int =
         current_chunk.append(line)
         current_length += line_length + 2  # +2 for the \n\n separator
     
-    # last chunk
+    # Don't forget the last chunk
     if current_chunk:
         yield "\n\n".join(current_chunk)
 
@@ -105,25 +108,21 @@ def generate_dataset(data: Iterator[str], num_samples: int = None, use_max: bool
     
     chunks = chunk_text(data)
     
-    for i, chunk in enumerate(chunks):
+    for i, chunk in enumerate(tqdm(chunks, desc="Chunks")):
         if num_samples and i >= num_samples:
             break
-            
-        for j in range(images_per_sample):
+        
+        for j in tqdm(range(images_per_sample), desc="Samples", leave=False):
             try:
                 img, caption = manager.render_random(chunk, use_max=use_max)
                 results.append((img, caption))
-                
             except Exception as e:
                 print(f"Error rendering sample {i}-{j}: {e}")
                 continue
-        
-        if (i + 1) % 10 == 0:
-            print(f"Generated {i + 1} chunks ({(i + 1) * images_per_sample} images)...")
     
     return results
 
-
+# Convenience function for backwards compatibility
 def render_random(text: str, use_max: bool = False) -> Tuple[Image.Image, str]:
     """Render text using a randomly selected renderer."""
     manager = RenderingManager()

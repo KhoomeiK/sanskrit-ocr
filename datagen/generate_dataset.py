@@ -1,8 +1,9 @@
-import os
-import json
 import argparse
+import json
+import os
 from pathlib import Path
 import sys
+from tqdm import tqdm
 sys.path.append(str(Path(__file__).parent))
 from augmentations.render_random import generate_dataset
 
@@ -23,7 +24,7 @@ def main(args):
     
     # Save images and captions
     with open(captions_path, "w", encoding="utf-8") as f_out:
-        for idx, (img, caption) in enumerate(samples):
+        for idx, (img, caption) in tqdm(enumerate(samples), total=len(samples), desc="Saving samples"):
             # Convert to RGB if necessary
             if img.mode != "RGB":
                 img = img.convert("RGB")
@@ -37,9 +38,6 @@ def main(args):
                 "text": caption
             }
             f_out.write(json.dumps(record, ensure_ascii=False) + "\n")
-            
-            if (idx + 1) % 100 == 0:
-                print(f"Saved {idx + 1}/{len(samples)} images")
     
     print(f"Dataset generation complete!")
     print(f"Total images generated: {len(samples)}")
